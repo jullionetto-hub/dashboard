@@ -1327,11 +1327,15 @@ async function doClear(){
 function abrirDiagnostico(){
   const date=document.getElementById('dayPicker').value;
   if(!date){toast('Selecione uma data primeiro','inf');return;}
-  const dayData=ALL.filter(d=>d.data===date&&!/^(total|data|dia|soma)/i.test(d.nome.trim()));
+  const dayData=ALL
+    .filter(d=>d.data===date)
+    .filter(d=>!/^(total|data|dia|soma)/i.test(d.nome.trim()))
+    .filter(d=>!dayShift||d.turno===dayShift);
   if(!dayData.length){toast('Sem dados para esta data','inf');return;}
 
+  const turnoLabel=dayShift?` — ${dayShift}`:'';
   const fmtDate=date.split('-').reverse().join('/');
-  document.getElementById('diagDate').textContent=fmtDate;
+  document.getElementById('diagDate').textContent=fmtDate+turnoLabel;
 
   // Performance por setor (setores são independentes, não somam)
   const setorStats={};

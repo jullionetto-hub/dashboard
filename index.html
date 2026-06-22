@@ -1011,7 +1011,7 @@ function updKPIs(data, turno, allData){
     const rows=src.filter(d=>d.setor===sec&&!d.ausente);
     const goal=getGoalShift(sec,t);
     const kgEl=document.getElementById('kg-'+id);
-    if(kgEl) kgEl.innerHTML=`Meta turno: <strong>${goal}</strong>`;
+    if(kgEl) kgEl.innerHTML=`${t?'Meta turno':'Meta Geral'}: <strong>${goal}</strong>`;
     if(!rows.length){
       document.getElementById('kv-'+id).textContent='—';
       document.getElementById('pb-'+id).style.width='0%';

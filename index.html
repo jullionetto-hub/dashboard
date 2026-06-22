@@ -360,9 +360,10 @@ table.dtbl tr:hover td{background:#f8fafc}
       <div class="ccrd"><h4>📈 Média por Setor vs Meta</h4><canvas id="barC" height="160"></canvas></div>
       <div class="ccrd"><h4>⏰ Registros por Turno</h4><canvas id="donutC" height="160"></canvas></div>
     </div>
+    <div class="ccrd" style="margin-top:1rem"><h4>📅 Evolução Dia a Dia — % da Meta por Setor</h4><canvas id="evolC" height="120"></canvas></div>
     <div class="filters">
-      <div class="fg"><label>Data Inicial</label><input type="date" id="fDtS" onchange="applyF()"></div>
-      <div class="fg"><label>Data Final</label><input type="date" id="fDtE" onchange="applyF()"></div>
+      <div class="fg"><label>De</label><input type="date" id="fDtS" onchange="applyF()"></div>
+      <div class="fg"><label>Até</label><input type="date" id="fDtE" onchange="applyF()"></div>
       <div class="fg"><label>Turno</label>
         <select id="fTurno" onchange="applyF()">
           <option value="">Todos</option><option>Manhã</option><option>Tarde</option><option>Noite</option>
@@ -373,7 +374,9 @@ table.dtbl tr:hover td{background:#f8fafc}
           <option value="">Todos</option><option>Separação</option><option>Checkout</option><option>Embalagem</option><option>Reposição</option>
         </select>
       </div>
-      <div class="fg"><label>Colaborador</label><input type="text" id="fNome" placeholder="Buscar..." oninput="applyF()"></div>
+      <div class="fg"><label>Colaborador</label>
+        <select id="fNome" onchange="applyF()"><option value="">Todos</option></select>
+      </div>
       <button class="btn bn" onclick="clearF()">✕ Limpar</button>
       <button class="btn bsuc" onclick="exportCSV()">📄 Exportar CSV</button>
     </div>
@@ -446,7 +449,7 @@ let FLT   = [];
 let page  = 1;
 const PG  = 20;
 let sortCol = 'media', sortDir = -1;
-let barChart, donutChart;
+let barChart, donutChart, evolChart;
 const FILES = {Manhã:[],Tarde:[],Noite:[]};
 let dayShift = ''; // filtro de turno na aba Por Data
 let dayCharts = []; // instâncias Chart.js do dia (para destruir ao re-renderizar)
@@ -725,8 +728,8 @@ function renderDailyView(){
   const totalPresent=presentNamesSet.size;
   const totalAbsent=new Set(dayData.filter(d=>d.ausente).map(d=>d.nome).filter(n=>!presentNamesSet.has(n))).size;
   const metaOk=allRank.filter(r=>r.pct>=100).length;
-  const metaPt=allRank.filter(r=>r.pct>=75&&r.pct<100).length;
-  const metaLo=allRank.filter(r=>r.pct<75).length;
+  const metaPt=allRank.filter(r=>r.pct>=90&&r.pct<100).length;
+  const metaLo=allRank.filter(r=>r.pct<90).length;
   const avgPct=totalPresent?allRank.reduce((s,r)=>s+r.pct,0)/totalPresent:0;
   const best=allRank[0];
   const worst=allRank[allRank.length-1];
@@ -775,8 +778,8 @@ function renderDailyView(){
       if(!r||r.ausente) return `<tr><td style="text-align:left;padding:.38rem .7rem;color:var(--muted)">${e}</td><td></td><td class="c-ab" style="text-align:center">ausente</td><td></td></tr>`;
       rowTotal+=r.qty; rank++;
       const pct=r.qty/GOALS[sec]*100;
-      const cls=pct>=100?'c-ok':pct>=75?'c-pt':'c-lo';
-      const bc=pct>=100?'#22c55e':pct>=75?'#f59e0b':'#ef4444';
+      const cls=pct>=100?'c-ok':pct>=90?'c-pt':'c-lo';
+      const bc=pct>=100?'#22c55e':pct>=90?'#f59e0b':'#ef4444';
       const rankBadge=rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':`<span style="font-size:.65rem;color:var(--muted);font-weight:600">#${rank}</span>`;
       return `<tr>
         <td style="text-align:left;padding:.38rem .7rem">
@@ -874,7 +877,7 @@ function renderDailyView(){
           <strong style="color:#22c55e">${metaOk} <span style="font-weight:400;color:var(--muted)">(${(metaOk/distTotal*100).toFixed(0)}%)</span></strong>
         </div>
         <div style="display:flex;justify-content:space-between">
-          <span><span style="display:inline-block;width:8px;height:8px;background:#f59e0b;border-radius:2px;margin-right:.3rem;vertical-align:middle"></span>Próximos (75–99%)</span>
+          <span><span style="display:inline-block;width:8px;height:8px;background:#f59e0b;border-radius:2px;margin-right:.3rem;vertical-align:middle"></span>Próximos (90–99%)</span>
           <strong style="color:#f59e0b">${metaPt} <span style="font-weight:400;color:var(--muted)">(${(metaPt/distTotal*100).toFixed(0)}%)</span></strong>
         </div>
         <div style="display:flex;justify-content:space-between">
@@ -899,8 +902,8 @@ function renderDailyView(){
   // ── LINHA 2+3: setores em grade 2×2 ──────────────────
   const legend=`<div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.65rem;font-size:.7rem">
     <span><span style="display:inline-block;width:10px;height:10px;background:#dcfce7;border:1px solid #22c55e;border-radius:2px;vertical-align:middle;margin-right:.25rem"></span>≥100%</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#fef3c7;border:1px solid #f59e0b;border-radius:2px;vertical-align:middle;margin-right:.25rem"></span>75–99%</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#fee2e2;border:1px solid #ef4444;border-radius:2px;vertical-align:middle;margin-right:.25rem"></span>&lt;75%</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#fef3c7;border:1px solid #f59e0b;border-radius:2px;vertical-align:middle;margin-right:.25rem"></span>90–99%</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#fee2e2;border:1px solid #ef4444;border-radius:2px;vertical-align:middle;margin-right:.25rem"></span>&lt;90%</span>
   </div>`;
 
   const sectorsGrid=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem">
@@ -948,7 +951,7 @@ function buildDayViz(data){
       labels:rd.map(d=>d.lbl),
       datasets:[{
         data:rd.map(d=>d.pct),
-        backgroundColor:rd.map(d=>d.pct>=100?'rgba(34,197,94,.85)':d.pct>=75?'rgba(245,158,11,.85)':'rgba(239,68,68,.85)'),
+        backgroundColor:rd.map(d=>d.pct>=100?'rgba(34,197,94,.85)':d.pct>=90?'rgba(245,158,11,.85)':'rgba(239,68,68,.85)'),
         borderRadius:5
       }]
     },
@@ -972,7 +975,7 @@ function buildDayViz(data){
     data:{
       labels:SECTORS,
       datasets:[
-        {label:'Realizado',data:totals,backgroundColor:totals.map((v,i)=>v>=goals[i]?'rgba(34,197,94,.85)':v>=goals[i]*.75?'rgba(245,158,11,.85)':'rgba(239,68,68,.85)'),borderRadius:5},
+        {label:'Realizado',data:totals,backgroundColor:totals.map((v,i)=>v>=goals[i]?'rgba(34,197,94,.85)':v>=goals[i]*.90?'rgba(245,158,11,.85)':'rgba(239,68,68,.85)'),borderRadius:5},
         {label:'Meta',data:goals,type:'line',borderColor:'#94a3b8',borderWidth:2,borderDash:[5,5],pointRadius:3,pointBackgroundColor:'#94a3b8',fill:false}
       ]
     },
@@ -1027,10 +1030,10 @@ function updKPIs(data, turno, allData){
     document.getElementById('kv-'+id).textContent=total.toFixed(0);
     const bar=document.getElementById('pb-'+id);
     bar.style.width=Math.min(pct,100)+'%';
-    bar.className='pbf '+(pct>=100?'pg':pct>=75?'py':'pr');
+    bar.className='pbf '+(pct>=100?'pg':pct>=90?'py':'pr');
     document.getElementById('kp-'+id).textContent=pct.toFixed(0)+'% da meta';
-    document.getElementById('kp-'+id).style.color=pct>=100?'var(--success)':pct>=75?'var(--warning)':'var(--danger)';
-    const[cls,lbl]=pct>=100?['tok','✓ Meta atingida']:pct>=75?['tpt','⚡ Próximo']:['tlo','↓ Abaixo'];
+    document.getElementById('kp-'+id).style.color=pct>=100?'var(--success)':pct>=90?'var(--warning)':'var(--danger)';
+    const[cls,lbl]=pct>=100?['tok','✓ Meta atingida']:pct>=90?['tpt','⚡ Próximo']:['tlo','↓ Abaixo'];
     document.getElementById('kt-'+id).textContent=lbl;
     document.getElementById('kt-'+id).className='ktag '+cls;
   });
@@ -1080,9 +1083,35 @@ function initCharts(){
     data:{labels:SHIFTS,datasets:[{data:[0,0,0],backgroundColor:['#fbbf24','#60a5fa','#a78bfa'],borderWidth:2,borderColor:'#fff'}]},
     options:{responsive:true,cutout:'65%',plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}}
   });
+  const ECOLS=['#3b82f6','#8b5cf6','#ec4899','#f59e0b'];
+  evolChart=new Chart(document.getElementById('evolC').getContext('2d'),{
+    type:'line',
+    data:{labels:[],datasets:SECTORS.map((sec,i)=>({
+      label:sec,data:[],borderColor:ECOLS[i],backgroundColor:ECOLS[i]+'22',
+      tension:0.3,pointRadius:3,fill:false,spanGaps:true
+    }))},
+    options:{
+      responsive:true,
+      plugins:{legend:{labels:{font:{size:10}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.raw}%`}}},
+      scales:{
+        x:{grid:{color:'#f1f5f9'},ticks:{font:{size:9}}},
+        y:{beginAtZero:true,ticks:{callback:v=>`${v}%`},grid:{color:'#f1f5f9'},
+           suggestedMax:120,
+           afterDataLimits:axis=>{
+             axis.max=Math.max(axis.max||0,110);
+             const ref=90;
+             if(!axis.chart._metaRef90){
+               axis.chart._metaRef90=true;
+               axis.chart.options.plugins.annotation={annotations:{ref:{type:'line',yMin:ref,yMax:ref,borderColor:'#ef444488',borderWidth:1,borderDash:[5,4],label:{content:'Meta mín. 90%',display:true,position:'end',font:{size:9},color:'#ef4444'}}}};
+             }
+           }
+        }
+      }
+    }
+  });
 }
 function updCharts(){
-  if(!barChart||!donutChart) return;
+  if(!barChart||!donutChart||!evolChart) return;
   const avgs=SECTORS.map(sec=>{
     const rows=FLT.filter(d=>d.setor===sec&&!d.ausente);
     if(!rows.length) return 0;
@@ -1092,6 +1121,34 @@ function updCharts(){
   barChart.update();
   donutChart.data.datasets[0].data=SHIFTS.map(s=>FLT.filter(d=>d.turno===s).length);
   donutChart.update();
+  // Evolução dia a dia
+  const fTurno=document.getElementById('fTurno').value;
+  const fNome=document.getElementById('fNome').value;
+  const dates=[...new Set(FLT.map(d=>d.data))].sort();
+  evolChart.data.labels=dates.map(d=>d.split('-').slice(1).reverse().join('/'));
+  SECTORS.forEach((sec,i)=>{
+    evolChart.data.datasets[i].data=dates.map(date=>{
+      if(fNome){
+        const rows=FLT.filter(d=>d.data===date&&d.setor===sec&&!d.ausente&&d.nome===fNome);
+        if(!rows.length) return null;
+        return +(rows.reduce((s,d)=>s+d.quantidade,0)/GOALS[sec]*100).toFixed(1);
+      } else {
+        const rows=FLT.filter(d=>d.data===date&&d.setor===sec&&!d.ausente);
+        if(!rows.length) return null;
+        return +(rows.reduce((s,d)=>s+d.quantidade,0)/getGoalShift(sec,fTurno,date)*100).toFixed(1);
+      }
+    });
+    evolChart.data.datasets[i].label=fNome?`${sec} (${fNome.split(' ')[0]})`:sec;
+  });
+  evolChart.update();
+  populateColabSelect();
+}
+function populateColabSelect(){
+  const sel=document.getElementById('fNome');
+  if(!sel||sel.tagName!=='SELECT') return;
+  const current=sel.value;
+  const names=[...new Set(ALL.filter(d=>!d.ausente).map(d=>d.nome))].sort();
+  sel.innerHTML='<option value="">Todos</option>'+names.map(n=>`<option value="${n}"${n===current?' selected':''}>${n}</option>`).join('');
 }
 
 // ── FILTERS (Resumo tab) ───────────────────────────────
@@ -1100,12 +1157,12 @@ function applyF(){
   const de=document.getElementById('fDtE').value;
   const turno=document.getElementById('fTurno').value;
   const setor=document.getElementById('fSetor').value;
-  const nome=document.getElementById('fNome').value.toLowerCase();
+  const nome=document.getElementById('fNome').value;
   FLT=ALL.filter(d=>
     !d.ausente&&
     (!ds||d.data>=ds)&&(!de||d.data<=de)&&
     (!turno||d.turno===turno)&&(!setor||d.setor===setor)&&
-    (!nome||d.nome.toLowerCase().includes(nome))
+    (!nome||d.nome===nome)
   );
   page=1;
   const fTurno=document.getElementById('fTurno').value;
@@ -1184,7 +1241,7 @@ function renderT(){
   const tb=pr.map(emp=>{
     const span=emp.setores.length;
     return emp.setores.map((r,i)=>{
-      const bc=r.pct>=100?'#22c55e':r.pct>=75?'#f59e0b':'#ef4444';
+      const bc=r.pct>=100?'#22c55e':r.pct>=90?'#f59e0b':'#ef4444';
       const pb=`<div class="mbar"><div class="mbar-bg"><div class="mbar-f" style="width:${Math.min(r.pct,100)}%;background:${bc}"></div></div><span style="color:${bc};font-weight:600;font-size:.74rem">${r.pct.toFixed(0)}%</span></div>`;
       const secCells=`<td><span class="stag ${sc[r.setor]||''}">${r.setor}</span></td><td><span class="sh ${tc[r.turno]||''}">${r.turno}</span></td><td>${r.dias}</td><td>${r.total.toFixed(0)}</td><td style="font-weight:600">${r.media.toFixed(1)} <span style="font-size:.68rem;color:var(--muted)">/ ${r.meta}</span></td><td>${pb}</td>`;
       if(i===0){
@@ -1196,13 +1253,13 @@ function renderT(){
       return `<tr>${secCells}</tr>`;
     }).map((row,i)=>{
       if(i===0){
-        const bc=emp.setores[0].pct>=100?'#22c55e':emp.setores[0].pct>=75?'#f59e0b':'#ef4444';
+        const bc=emp.setores[0].pct>=100?'#22c55e':emp.setores[0].pct>=90?'#f59e0b':'#ef4444';
         const pb=`<div class="mbar"><div class="mbar-bg"><div class="mbar-f" style="width:${Math.min(emp.setores[0].pct,100)}%;background:${bc}"></div></div><span style="color:${bc};font-weight:600;font-size:.74rem">${emp.setores[0].pct.toFixed(0)}%</span></div>`;
         const r=emp.setores[0];
         return `<tr style="${span>1?'border-top:2px solid #cbd5e1':''}"><td rowspan="${span}" style="font-weight:700;vertical-align:middle;border-right:2px solid #e2e8f0">${emp.nome}${span>1?`<br><span style="font-size:.62rem;font-weight:400;color:var(--muted)">${span} funções</span>`:''}</td><td><span class="stag ${sc[r.setor]||''}">${r.setor}</span></td><td><span class="sh ${tc[r.turno]||''}">${r.turno}</span></td><td>${r.dias}</td><td>${r.total.toFixed(0)}</td><td style="font-weight:600">${r.media.toFixed(1)} <span style="font-size:.68rem;color:var(--muted)">/ ${r.meta}</span></td><td>${pb}</td></tr>`;
       }
       const r=emp.setores[i];
-      const bc=r.pct>=100?'#22c55e':r.pct>=75?'#f59e0b':'#ef4444';
+      const bc=r.pct>=100?'#22c55e':r.pct>=90?'#f59e0b':'#ef4444';
       const pb=`<div class="mbar"><div class="mbar-bg"><div class="mbar-f" style="width:${Math.min(r.pct,100)}%;background:${bc}"></div></div><span style="color:${bc};font-weight:600;font-size:.74rem">${r.pct.toFixed(0)}%</span></div>`;
       return `<tr style="background:#fafbfc"><td><span class="stag ${sc[r.setor]||''}">${r.setor}</span></td><td><span class="sh ${tc[r.turno]||''}">${r.turno}</span></td><td>${r.dias}</td><td>${r.total.toFixed(0)}</td><td style="font-weight:600">${r.media.toFixed(1)} <span style="font-size:.68rem;color:var(--muted)">/ ${r.meta}</span></td><td>${pb}</td></tr>`;
     }).join('');

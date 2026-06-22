@@ -1127,7 +1127,7 @@ function updCharts(){
   const dates=[...new Set(FLT.map(d=>d.data))].sort();
   evolChart.data.labels=dates.map(d=>d.split('-').slice(1).reverse().join('/'));
   SECTORS.forEach((sec,i)=>{
-    evolChart.data.datasets[i].data=dates.map(date=>{
+    const pts=dates.map(date=>{
       if(fNome){
         const rows=FLT.filter(d=>d.data===date&&d.setor===sec&&!d.ausente&&d.nome===fNome);
         if(!rows.length) return null;
@@ -1138,7 +1138,12 @@ function updCharts(){
         return +(rows.reduce((s,d)=>s+d.quantidade,0)/getGoalShift(sec,fTurno,date)*100).toFixed(1);
       }
     });
+    const nonNull=pts.filter(v=>v!==null).length;
+    evolChart.data.datasets[i].data=pts;
     evolChart.data.datasets[i].label=fNome?`${sec} (${fNome.split(' ')[0]})`:sec;
+    evolChart.data.datasets[i].pointRadius=pts.map(v=>v===null?0:nonNull<=2?8:3);
+    evolChart.data.datasets[i].pointHoverRadius=nonNull<=2?12:6;
+    evolChart.data.datasets[i].pointStyle=nonNull<=1?'rectRot':'circle';
   });
   evolChart.update();
   populateColabSelect();

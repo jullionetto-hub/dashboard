@@ -425,7 +425,7 @@ const GOALS   = {Separação:65,Checkout:90,Embalagem:120,Reposição:90}; // me
 function getGoalShift(sec,turno,date){
   // Base por setor/turno
   let base;
-  if(sec==='Reposição') base=90;
+  if(sec==='Reposição') base=270;
   else if(turno==='Tarde') base=250;
   else if(turno===''||!turno) base=850;
   else base=300;
@@ -1381,7 +1381,7 @@ function abrirDiagnostico(){
   // Setores que bateram ou ficaram próximos da meta
   Object.entries(setorStats).forEach(([sec,s])=>{
     if(s.pct>=100) pos.push(`Setor <strong>${sec}</strong>: meta atingida — <strong>${s.total} pedidos</strong> (${s.pct.toFixed(0)}% da meta de ${s.goal})`);
-    else if(s.pct>=75) pos.push(`Setor <strong>${sec}</strong>: próximo da meta — ${s.total} de ${s.goal} pedidos (${s.pct.toFixed(0)}%)`);
+    else if(s.pct>=90) pos.push(`Setor <strong>${sec}</strong>: próximo da meta — ${s.total} de ${s.goal} pedidos (${s.pct.toFixed(0)}%)`);
   });
   // Pessoas com bom desempenho médio (>=100%)
   const destaquesPos=pessoas.filter(p=>p.pctMedio>=100);
@@ -1393,14 +1393,14 @@ function abrirDiagnostico(){
 
   // ── PONTOS NEGATIVOS ──
   const neg=[];
-  // Setores abaixo de 75%
+  // Setores abaixo de 90%
   Object.entries(setorStats).forEach(([sec,s])=>{
-    if(s.pct<75) neg.push(`Setor <strong>${sec}</strong>: abaixo da meta — ${s.total} de ${s.goal} pedidos (${s.pct.toFixed(0)}%)`);
+    if(s.pct<90) neg.push(`Setor <strong>${sec}</strong>: abaixo da meta — ${s.total} de ${s.goal} pedidos (${s.pct.toFixed(0)}%)`);
   });
-  // Pessoas com desempenho médio abaixo de 50% (que NÃO estão nos positivos)
-  const muitoBaixo=pessoas.filter(p=>p.pctMedio<50&&!destaquesPos.find(d=>d.nome===p.nome));
+  // Pessoas com desempenho médio abaixo de 90% (que NÃO estão nos positivos)
+  const muitoBaixo=pessoas.filter(p=>p.pctMedio<90&&!destaquesPos.find(d=>d.nome===p.nome));
   if(muitoBaixo.length){
-    neg.push(`Colaboradores com baixo desempenho (abaixo de 50%): ${muitoBaixo.map(p=>`<strong>${p.nome.split(' ')[0]}</strong> (${p.pctMedio.toFixed(0)}%)`).join(', ')}`);
+    neg.push(`Colaboradores com baixo desempenho (abaixo de 90%): ${muitoBaixo.map(p=>`<strong>${p.nome.split(' ')[0]}</strong> (${p.pctMedio.toFixed(0)}%)`).join(', ')}`);
   }
   if(absentNames.length>0) neg.push(`Ausências: <strong>${absentNames.map(n=>n.split(' ')[0]).join(', ')}</strong> (${absentNames.length} ${absentNames.length===1?'pessoa':'pessoas'})`);
   const setoresSemDados=SECTORS.filter(s=>!setorStats[s]);
@@ -1409,12 +1409,12 @@ function abrirDiagnostico(){
   // ── MELHORIAS SUGERIDAS ──
   const mel=[];
   Object.entries(setorStats).forEach(([sec,s])=>{
-    if(s.pct<75) mel.push(`Reforçar o setor <strong>${sec}</strong> — faltaram ${s.goal-s.total} pedidos para atingir a meta`);
+    if(s.pct<90) mel.push(`Reforçar o setor <strong>${sec}</strong> — faltaram ${s.goal-s.total} pedidos para atingir a meta`);
   });
   if(muitoBaixo.length) mel.push(`Acompanhar individualmente: ${muitoBaixo.map(p=>`<strong>${p.nome.split(' ')[0]}</strong>`).join(', ')} — verificar dificuldades ou necessidade de treinamento`);
   if(absentNames.length>=2) mel.push(`${absentNames.length} ausências impactaram a equipe — verificar motivo e planejar cobertura`);
-  const quaseMeta=pessoas.filter(p=>p.pctMedio>=75&&p.pctMedio<100&&!destaquesPos.find(d=>d.nome===p.nome));
-  if(quaseMeta.length) mel.push(`${quaseMeta.length} colaborador(es) próximos da meta (75–99%) — um acompanhamento pode ajudá-los a alcançar 100%`);
+  const quaseMeta=pessoas.filter(p=>p.pctMedio>=90&&p.pctMedio<100&&!destaquesPos.find(d=>d.nome===p.nome));
+  if(quaseMeta.length) mel.push(`${quaseMeta.length} colaborador(es) próximos da meta (90–99%) — um acompanhamento pode ajudá-los a alcançar 100%`);
   if(mel.length===0) mel.push('Ótimo desempenho — manter o padrão e reconhecer a equipe');
 
   // ── RESUMO: quantos setores bateram a meta ──
@@ -1430,7 +1430,7 @@ function abrirDiagnostico(){
     </div>`;
 
   const resumoSetores=setoresList.map(([sec,s])=>{
-    const cor=s.pct>=100?'#22c55e':s.pct>=75?'#f59e0b':'#ef4444';
+    const cor=s.pct>=100?'#22c55e':s.pct>=90?'#f59e0b':'#ef4444';
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.28rem 0;border-bottom:1px solid #f1f5f9">
       <span style="font-size:.8rem;font-weight:600">${sec}</span>
       <span style="font-size:.8rem;font-weight:700;color:${cor}">${s.total} pedidos — ${s.pct.toFixed(0)}%</span>

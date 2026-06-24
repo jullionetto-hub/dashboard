@@ -523,6 +523,7 @@ async function atualizarDados(){
   const btn=document.getElementById('btnAtualizar');
   btn.textContent='⏳ Atualizando...';
   btn.disabled=true;
+  ALL=[];FLT=[];  // força estado limpo para garantir renderização correta
   await loadFromSupabase();
   btn.textContent='🔄 Atualizar';
   btn.disabled=false;

@@ -495,6 +495,7 @@ async function doLogout(){
 }
 async function loadFromSupabase(){
   toast('Carregando dados...','inf');
+  const prevLatest=ALL.length?[...new Set(ALL.map(d=>d.data))].sort().pop():null;
   const {data:records,error}=await sb.from('performance_records').select('*').order('data');
   if(error){toast('Erro ao carregar dados','err');console.error(error);return;}
   ALL=(records||[]).map(r=>({nome:r.nome,setor:r.setor,data:r.data,quantidade:r.quantidade,turno:r.turno,ausente:r.ausente,_file:r.arquivo}));
@@ -504,14 +505,15 @@ async function loadFromSupabase(){
     FILES.Tarde=files.filter(f=>f.turno==='Tarde').map(f=>f.filename);
     FILES.Noite=files.filter(f=>f.turno==='Noite').map(f=>f.filename);
   }
-  // Ir para a última data com dados se a data atual não tiver registros
   if(ALL.length){
     const datas=[...new Set(ALL.map(d=>d.data))].sort();
     const picker=document.getElementById('dayPicker');
     const dataSel=picker.value;
-    if(!dataSel||!ALL.some(d=>d.data===dataSel)){
-      picker.value=datas[datas.length-1];
-      toast(`Mostrando última data com dados: ${datas[datas.length-1].split('-').reverse().join('/')}`, 'inf');
+    const latestDate=datas[datas.length-1];
+    // Pula para a data mais recente se: sem data selecionada, data selecionada sem dados, ou chegaram dados mais novos
+    if(!dataSel||!ALL.some(d=>d.data===dataSel)||latestDate>dataSel){
+      picker.value=latestDate;
+      if(latestDate!==prevLatest) toast(`Novos dados: ${latestDate.split('-').reverse().join('/')} 🆕`,'ok');
     }
   }
   applyF();renderFileLists();renderDailyView();

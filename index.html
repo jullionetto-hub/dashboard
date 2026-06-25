@@ -497,9 +497,24 @@ async function doLogout(){
 async function loadFromSupabase(){
   toast('Carregando dados...','inf');
   const prevLatest=ALL.length?[...new Set(ALL.map(d=>d.data))].sort().pop():null;
-  const {data:records,error}=await sb.from('performance_records').select('*').order('data').range(0,9999);
-  if(error){toast('Erro ao carregar dados','err');console.error(error);return;}
-  ALL=(records||[]).map(r=>({nome:r.nome,setor:r.setor,data:r.data,quantidade:r.quantidade,turno:r.turno,ausente:r.ausente,_file:r.arquivo}));
+  // Paginação: carrega até 1000 por vez para superar o limite padrão do Supabase
+  let _recs=[];
+  for(let _f=0;;_f+=1000){
+    const {data:_p,error}=await sb.from('performance_records').select('*').order('data').range(_f,_f+999);
+    if(error){toast('Erro ao carregar dados','err');console.error(error);return;}
+    if(!_p||!_p.length) break;
+    _recs=_recs.concat(_p);
+    if(_p.length<1000) break;
+  }
+  ALL=_recs.map(r=>({
+    nome:(r.nome||'').trim(),
+    setor:(r.setor||'').trim(),
+    data:r.data?String(r.data).substring(0,10):'',
+    quantidade:Number(r.quantidade)||0,
+    turno:(r.turno||'').trim(),
+    ausente:r.ausente===true||r.ausente==='true',
+    _file:r.arquivo
+  }));
   const {data:files}=await sb.from('uploaded_files').select('*');
   if(files){
     FILES.Manhã=files.filter(f=>f.turno==='Manhã').map(f=>f.filename);

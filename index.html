@@ -719,6 +719,7 @@ function renderDailyView(){
   const allDayData=ALL.filter(d=>d.data===date&&!/^(total|data|dia|soma)/i.test(d.nome.trim()));
   const dayData=dayShift?allDayData.filter(d=>d.turno===dayShift):allDayData;
   const fmtDate=date.split('-').reverse().join('/');
+  const isSat=new Date(date+'T12:00:00').getDay()===6;
   const total=dayData.filter(d=>!d.ausente).length;
   document.getElementById('dayInfo').textContent=total?`${total} registros${dayShift?' ('+dayShift+')':''}`:'Sem dados para esta data';
 
@@ -738,8 +739,9 @@ function renderDailyView(){
   const allRank=[];
   dayData.filter(d=>!d.ausente).forEach(d=>{
     const ex=allRank.find(r=>r.nome===d.nome&&r.setor===d.setor);
-    if(ex){ex.qty+=d.quantidade;ex.pct=ex.qty/GOALS[d.setor]*100;}
-    else allRank.push({nome:d.nome,first:d.nome.split(' ')[0],setor:d.setor,qty:d.quantidade,pct:d.quantidade/GOALS[d.setor]*100,turno:d.turno});
+    const g=GOALS[d.setor]*(isSat?.5:1);
+    if(ex){ex.qty+=d.quantidade;ex.pct=ex.qty/g*100;}
+    else allRank.push({nome:d.nome,first:d.nome.split(' ')[0],setor:d.setor,qty:d.quantidade,pct:d.quantidade/g*100,turno:d.turno});
   });
   allRank.sort((a,b)=>b.pct-a.pct);
 
@@ -761,9 +763,11 @@ function renderDailyView(){
     if(!hasLoaded) continue;
 
     const shiftGoal=getGoalShift(sec,dayShift);
+    const adjGoal=isSat?Math.round(shiftGoal*.5):shiftGoal;
+    const satTag=isSat?' <span style="color:#f59e0b;font-weight:600">(Sábado ½)</span>':'';
     const shiftLabel=dayShift
-      ?` <span style="font-size:.7rem;font-weight:400;opacity:.75">| ${dayShift} — Meta equipe: ${shiftGoal}</span>`
-      :(secData.length?` <span style="font-size:.7rem;font-weight:400;opacity:.75">| ${[...new Set(secData.map(d=>d.turno))].sort().join('+')} — Meta: ${shiftGoal}</span>`:'');
+      ?` <span style="font-size:.7rem;font-weight:400;opacity:.75">| ${dayShift} — Meta equipe: ${adjGoal}${satTag}</span>`
+      :(secData.length?` <span style="font-size:.7rem;font-weight:400;opacity:.75">| ${[...new Set(secData.map(d=>d.turno))].sort().join('+')} — Meta: ${adjGoal}${satTag}</span>`:'');
 
     if(!secData.length){
       sectorsHtml+=`<div class="sector-block">
@@ -796,7 +800,7 @@ function renderDailyView(){
       const r=empMap[e];
       if(!r||r.ausente) return `<tr><td style="text-align:left;padding:.38rem .7rem;color:var(--muted)">${e}</td><td></td><td class="c-ab" style="text-align:center">ausente</td><td></td></tr>`;
       rowTotal+=r.qty; rank++;
-      const pct=r.qty/GOALS[sec]*100;
+      const pct=r.qty/(GOALS[sec]*(isSat?.5:1))*100;
       const cls=pct>=100?'c-ok':pct>=90?'c-pt':'c-lo';
       const bc=pct>=100?'#22c55e':pct>=90?'#f59e0b':'#ef4444';
       const rankBadge=rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':`<span style="font-size:.65rem;color:var(--muted);font-weight:600">#${rank}</span>`;
@@ -818,7 +822,7 @@ function renderDailyView(){
       </tr>`;
     }).join('');
 
-    const teamPct=rowTotal/shiftGoal*100;
+    const teamPct=rowTotal/(shiftGoal*(isSat?.5:1))*100;
     const teamBc=teamPct>=100?'#22c55e':teamPct>=75?'#f59e0b':'#ef4444';
     sectorsHtml+=`<div class="sector-block">
       <div class="sector-title ${secTags[sec]}">${secIcons[sec]} ${sec}${shiftLabel}</div>

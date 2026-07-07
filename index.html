@@ -217,6 +217,41 @@ table.dtbl tr:hover td{background:#f8fafc}
 .kall-stat{text-align:center;background:var(--bg);border-radius:.4rem;padding:.35rem .5rem}
 .kall-stat .kas-lbl{font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .kall-stat .kas-val{font-size:1rem;font-weight:700;line-height:1.2}
+
+/* PREVENÇÃO */
+.pv-form{background:var(--card);border-radius:.7rem;padding:1.2rem;box-shadow:var(--sh);margin-bottom:1rem}
+.pv-metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:.7rem;margin-bottom:1.1rem}
+@media(max-width:750px){.pv-metrics{grid-template-columns:repeat(3,1fr)}.pv-cards{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:480px){.pv-metrics{grid-template-columns:repeat(2,1fr)}.pv-cards{grid-template-columns:repeat(2,1fr)}}
+.pv-met{display:flex;flex-direction:column;gap:.25rem}
+.pv-met label{font-size:.65rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.pv-met input{border:1px solid var(--border);border-radius:.375rem;padding:.38rem .55rem;font-size:.95rem;font-weight:700;text-align:center;color:var(--text);outline:none;width:100%}
+.pv-met input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.pv-sec{margin-bottom:1.1rem}
+.pv-sec-title{font-size:.8rem;font-weight:700;color:var(--text);margin-bottom:.5rem;display:flex;align-items:center;justify-content:space-between}
+.pv-table{width:100%;border-collapse:collapse;font-size:.8rem;margin-bottom:.4rem}
+.pv-table th{background:#f8fafc;padding:.35rem .6rem;text-align:left;font-weight:600;color:var(--muted);font-size:.67rem;text-transform:uppercase;border:1px solid var(--border)}
+.pv-table td{padding:.28rem .45rem;border:1px solid var(--border);vertical-align:middle}
+.pv-table input,.pv-table select{border:1px solid var(--border);border-radius:.3rem;padding:.24rem .4rem;font-size:.78rem;width:100%;background:#fff;outline:none}
+.pv-table input:focus,.pv-table select:focus{border-color:var(--primary)}
+.pv-del{background:none;border:none;color:var(--danger);cursor:pointer;font-size:.95rem;padding:.1rem .3rem;line-height:1}
+.pv-add{font-size:.73rem;padding:.25rem .65rem;background:#f0f7ff;border:1px dashed #93c5fd;border-radius:.35rem;cursor:pointer;color:var(--primary);font-weight:500;transition:all .15s}
+.pv-add:hover{background:#dbeafe}
+.pv-cards{display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;margin-bottom:1.1rem}
+.pv-card{background:var(--card);border-radius:.65rem;padding:.9rem .8rem;box-shadow:var(--sh);text-align:center;border-top:3px solid var(--primary)}
+.pv-card.c1{border-color:#3b82f6}.pv-card.c2{border-color:#22c55e}.pv-card.c3{border-color:#ef4444}.pv-card.c4{border-color:#f59e0b}.pv-card.c5{border-color:#8b5cf6}
+.pv-card-val{font-size:1.7rem;font-weight:700;line-height:1.1}
+.pv-card-lbl{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:.18rem}
+.pv-hist{background:var(--card);border-radius:.7rem;padding:1.1rem;box-shadow:var(--sh)}
+.pv-status-a{background:#dcfce7;color:#166534;padding:.1rem .45rem;border-radius:9999px;font-size:.68rem;font-weight:700;white-space:nowrap}
+.pv-status-n{background:#fee2e2;color:#991b1b;padding:.1rem .45rem;border-radius:9999px;font-size:.68rem;font-weight:700;white-space:nowrap}
+.pv-hist-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.pv-hist-table th{background:#f8fafc;padding:.38rem .65rem;text-align:center;font-weight:600;color:var(--muted);font-size:.67rem;text-transform:uppercase;border:1px solid var(--border)}
+.pv-hist-table td{padding:.38rem .65rem;border:1px solid var(--border);text-align:center}
+.pv-hist-table tr:hover td{background:#f0f7ff}
+.pv-hist-table td.td-left{text-align:left}
+.pv-expand{background:none;border:none;cursor:pointer;color:var(--primary);font-size:.75rem;padding:.1rem .3rem;text-decoration:underline}
+.pv-detail{background:#f8fafc;font-size:.76rem;padding:.5rem .8rem}
 </style>
 </head>
 <body>
@@ -329,6 +364,7 @@ table.dtbl tr:hover td{background:#f8fafc}
   <div class="tabs">
     <button class="tab on" id="tab-dia" onclick="switchTab('dia')">📅 Por Data</button>
     <button class="tab" id="tab-resumo" onclick="switchTab('resumo')">📊 Resumo do Período</button>
+    <button class="tab" id="tab-prevencao" onclick="switchTab('prevencao')">🛡️ Prevenção</button>
   </div>
 
   <!-- TAB: POR DATA -->
@@ -383,6 +419,86 @@ table.dtbl tr:hover td{background:#f8fafc}
     <div id="tbox">
       <div class="nodata"><span class="ni">📋</span><strong>Nenhum dado</strong><br><small>Importe uma planilha para ver o resumo.</small></div>
     </div>
+  </div>
+
+  <!-- TAB: PREVENÇÃO -->
+  <div class="tab-content" id="tc-prevencao" style="display:none">
+
+    <!-- Cards do dia atual -->
+    <div class="pv-cards" id="pvCards" style="display:none">
+      <div class="pv-card c1"><div class="pv-card-val" id="pvc-pedidos">0</div><div class="pv-card-lbl">Pedidos Analisados</div></div>
+      <div class="pv-card c2"><div class="pv-card-val" id="pvc-ajustados">0</div><div class="pv-card-lbl">Ajustados</div></div>
+      <div class="pv-card c3"><div class="pv-card-val" id="pvc-protocolos">0</div><div class="pv-card-lbl">Protocolos</div></div>
+      <div class="pv-card c4"><div class="pv-card-val" id="pvc-agendados">0</div><div class="pv-card-lbl">Agendados</div></div>
+      <div class="pv-card c5"><div class="pv-card-val" id="pvc-valor">R$0</div><div class="pv-card-lbl">Valor Entradas</div></div>
+    </div>
+
+    <!-- Formulário de lançamento -->
+    <div class="pv-form">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.6rem">
+        <p class="stitle" style="margin:0">Lançar Dados do Dia</p>
+        <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+          <label style="font-size:.72rem;color:var(--muted);font-weight:600">Data:</label>
+          <input type="date" id="pvDate" class="day-input" onchange="pvLoadDay()">
+          <button class="btn bsuc" onclick="savePrevention()">💾 Salvar</button>
+        </div>
+      </div>
+
+      <!-- Métricas numéricas -->
+      <div class="pv-metrics">
+        <div class="pv-met"><label>Pedidos Analisados</label><input type="number" id="pvPedidos" min="0" value="0"></div>
+        <div class="pv-met"><label>Ajustados</label><input type="number" id="pvAjustados" min="0" value="0"></div>
+        <div class="pv-met"><label>Protocolos</label><input type="number" id="pvProtocolos" min="0" value="0"></div>
+        <div class="pv-met"><label>Agendados</label><input type="number" id="pvAgendados" min="0" value="0"></div>
+        <div class="pv-met"><label>Referências</label><input type="number" id="pvRefs" min="0" value="0"></div>
+      </div>
+
+      <!-- Ajustes de Referência -->
+      <div class="pv-sec">
+        <div class="pv-sec-title">
+          <span>Ajustes de Referência</span>
+          <button class="pv-add" onclick="addAjuste()">+ Adicionar linha</button>
+        </div>
+        <table class="pv-table">
+          <thead><tr>
+            <th style="width:110px">Pedido Nº</th>
+            <th>Referência Atual</th>
+            <th>Sugestão</th>
+            <th style="width:105px">Status</th>
+            <th style="width:36px"></th>
+          </tr></thead>
+          <tbody id="pvAjustesTbody"></tbody>
+        </table>
+      </div>
+
+      <!-- Entradas Manuais -->
+      <div class="pv-sec">
+        <div class="pv-sec-title">
+          <span>Entradas Manuais</span>
+          <button class="pv-add" onclick="addEntrada()">+ Adicionar linha</button>
+        </div>
+        <table class="pv-table">
+          <thead><tr>
+            <th>Referência</th>
+            <th style="width:130px">Preço Unit. (R$)</th>
+            <th style="width:80px">Qtd</th>
+            <th style="width:130px">Total (R$)</th>
+            <th style="width:36px"></th>
+          </tr></thead>
+          <tbody id="pvEntradasTbody"></tbody>
+        </table>
+        <div style="text-align:right;font-size:.86rem;font-weight:700;margin-top:.4rem">
+          Total da entrada: <span id="pvTotalEntrada" style="color:var(--primary)">R$ 0,00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Histórico -->
+    <div class="pv-hist">
+      <p class="stitle" style="margin-bottom:.8rem">Histórico de Prevenção</p>
+      <div id="pvHistoric"><div class="nodata"><span class="ni">🛡️</span><strong>Nenhum registro ainda</strong><br><small>Lance o primeiro dia acima.</small></div></div>
+    </div>
+
   </div>
 
 </div><!-- /wrap -->
@@ -549,17 +665,228 @@ document.addEventListener('DOMContentLoaded',async()=>{
   if(!session){showLoginScreen();return;}
   showDashboard(session.user.email);
   setupDates();
+  document.getElementById('pvDate').value=pvToday();
   await loadFromSupabase();
+  await loadPrevention();
   initCharts();
   sb.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT')showLoginScreen();});
 });
 
 // ── TABS ───────────────────────────────────────────────
 function switchTab(t){
-  ['dia','resumo'].forEach(k=>{
+  ['dia','resumo','prevencao'].forEach(k=>{
     document.getElementById('tab-'+k).classList.toggle('on',k===t);
     document.getElementById('tc-'+k).style.display=k===t?'block':'none';
   });
+}
+
+// ── PREVENÇÃO ───────────────────────────────────────────
+let PREV_ALL=[];
+
+function pvFmt(n){return'R$ '+Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function pvToday(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+
+async function loadPrevention(){
+  const{data,error}=await sb.from('prevention_records').select('*').order('data',{ascending:false});
+  if(error){console.error('prevention load:',error);return;}
+  PREV_ALL=data||[];
+  renderPvCards();
+  renderPvHistoric();
+}
+
+function pvLoadDay(){
+  const d=document.getElementById('pvDate').value;
+  const rec=PREV_ALL.find(r=>r.data===d);
+  pvClearForm();
+  if(!rec)return;
+  document.getElementById('pvPedidos').value=rec.pedidos_analisados||0;
+  document.getElementById('pvAjustados').value=rec.ajustados||0;
+  document.getElementById('pvProtocolos').value=rec.protocolos||0;
+  document.getElementById('pvAgendados').value=rec.agendados||0;
+  document.getElementById('pvRefs').value=rec.referencias||0;
+  const aj=rec.ajustes||[];
+  aj.forEach(a=>addAjuste(a.pedido,a.referencia,a.sugestao,a.status));
+  const en=rec.entradas||[];
+  en.forEach(e=>addEntrada(e.ref,e.preco,e.qtd));
+}
+
+function pvClearForm(){
+  ['pvPedidos','pvAjustados','pvProtocolos','pvAgendados','pvRefs'].forEach(id=>{
+    document.getElementById(id).value=0;
+  });
+  document.getElementById('pvAjustesTbody').innerHTML='';
+  document.getElementById('pvEntradasTbody').innerHTML='';
+  pvCalcTotal();
+}
+
+function addAjuste(pedido='',referencia='',sugestao='',status='Aceito'){
+  const tb=document.getElementById('pvAjustesTbody');
+  const tr=document.createElement('tr');
+  tr.innerHTML=`
+    <td><input type="text" value="${pedido}" placeholder="Ex: 5536864"></td>
+    <td><input type="text" value="${referencia}" placeholder="Ex: 952400 - Feitiços"></td>
+    <td><input type="text" value="${sugestao}" placeholder="Ex: 952100-FRUTAS-VERMELHAS"></td>
+    <td><select>
+      <option value="Aceito"${status==='Aceito'?' selected':''}>✅ Aceito</option>
+      <option value="Negado"${status==='Negado'?' selected':''}>❌ Negado</option>
+    </select></td>
+    <td><button class="pv-del" onclick="this.closest('tr').remove()">✕</button></td>`;
+  tb.appendChild(tr);
+}
+
+function addEntrada(ref='',preco='',qtd=''){
+  const tb=document.getElementById('pvEntradasTbody');
+  const tr=document.createElement('tr');
+  tr.innerHTML=`
+    <td><input type="text" value="${ref}" placeholder="Ex: HC578"></td>
+    <td><input type="number" step="0.01" min="0" value="${preco}" placeholder="0,00" oninput="pvCalcRowTotal(this)"></td>
+    <td><input type="number" min="0" value="${qtd}" placeholder="0" oninput="pvCalcRowTotal(this)"></td>
+    <td class="td-total" style="font-weight:700;color:var(--primary)">${preco&&qtd?pvFmt(preco*qtd):'R$ 0,00'}</td>
+    <td><button class="pv-del" onclick="this.closest('tr').remove();pvCalcTotal()">✕</button></td>`;
+  tb.appendChild(tr);
+  pvCalcTotal();
+}
+
+function pvCalcRowTotal(inp){
+  const tr=inp.closest('tr');
+  const cells=tr.querySelectorAll('input[type=number]');
+  const preco=parseFloat(cells[0].value)||0;
+  const qtd=parseFloat(cells[1].value)||0;
+  tr.querySelector('.td-total').textContent=pvFmt(preco*qtd);
+  pvCalcTotal();
+}
+
+function pvCalcTotal(){
+  let total=0;
+  document.querySelectorAll('#pvEntradasTbody tr').forEach(tr=>{
+    const cells=tr.querySelectorAll('input[type=number]');
+    const p=parseFloat(cells[0]?.value)||0;
+    const q=parseFloat(cells[1]?.value)||0;
+    total+=p*q;
+  });
+  document.getElementById('pvTotalEntrada').textContent=pvFmt(total);
+  return total;
+}
+
+function pvReadAjustes(){
+  const rows=[];
+  document.querySelectorAll('#pvAjustesTbody tr').forEach(tr=>{
+    const inp=tr.querySelectorAll('input');
+    const sel=tr.querySelector('select');
+    const pedido=(inp[0]?.value||'').trim();
+    const referencia=(inp[1]?.value||'').trim();
+    const sugestao=(inp[2]?.value||'').trim();
+    if(pedido||referencia||sugestao)
+      rows.push({pedido,referencia,sugestao,status:sel?.value||'Aceito'});
+  });
+  return rows;
+}
+
+function pvReadEntradas(){
+  const rows=[];
+  document.querySelectorAll('#pvEntradasTbody tr').forEach(tr=>{
+    const inp=tr.querySelectorAll('input');
+    const ref=(inp[0]?.value||'').trim();
+    const preco=parseFloat(inp[1]?.value)||0;
+    const qtd=parseFloat(inp[2]?.value)||0;
+    if(ref||preco||qtd) rows.push({ref,preco,qtd,total:preco*qtd});
+  });
+  return rows;
+}
+
+async function savePrevention(){
+  const data=document.getElementById('pvDate').value;
+  if(!data){toast('Selecione uma data','err');return;}
+  const payload={
+    data,
+    pedidos_analisados:parseInt(document.getElementById('pvPedidos').value)||0,
+    ajustados:parseInt(document.getElementById('pvAjustados').value)||0,
+    protocolos:parseInt(document.getElementById('pvProtocolos').value)||0,
+    agendados:parseInt(document.getElementById('pvAgendados').value)||0,
+    referencias:parseInt(document.getElementById('pvRefs').value)||0,
+    ajustes:pvReadAjustes(),
+    entradas:pvReadEntradas(),
+  };
+  const{error}=await sb.from('prevention_records').upsert(payload,{onConflict:'data'});
+  if(error){toast('Erro ao salvar: '+error.message,'err');console.error(error);return;}
+  toast('Salvo com sucesso!','ok');
+  await loadPrevention();
+}
+
+function renderPvCards(){
+  const today=pvToday();
+  const rec=PREV_ALL.find(r=>r.data===today);
+  const el=document.getElementById('pvCards');
+  if(!rec){el.style.display='none';return;}
+  el.style.display='grid';
+  document.getElementById('pvc-pedidos').textContent=rec.pedidos_analisados||0;
+  document.getElementById('pvc-ajustados').textContent=rec.ajustados||0;
+  document.getElementById('pvc-protocolos').textContent=rec.protocolos||0;
+  document.getElementById('pvc-agendados').textContent=rec.agendados||0;
+  const totalVal=(rec.entradas||[]).reduce((s,e)=>s+(e.total||0),0);
+  document.getElementById('pvc-valor').textContent=pvFmt(totalVal);
+}
+
+function renderPvHistoric(){
+  const el=document.getElementById('pvHistoric');
+  if(!PREV_ALL.length){
+    el.innerHTML='<div class="nodata"><span class="ni">🛡️</span><strong>Nenhum registro ainda</strong><br><small>Lance o primeiro dia acima.</small></div>';
+    return;
+  }
+  let html=`<table class="pv-hist-table"><thead><tr>
+    <th>Data</th><th>Pedidos</th><th>Ajustados</th><th>Protocolos</th><th>Agendados</th><th>Refs</th><th>Valor Entradas</th><th>Detalhes</th>
+  </tr></thead><tbody>`;
+  PREV_ALL.forEach((r,i)=>{
+    const totalVal=(r.entradas||[]).reduce((s,e)=>s+(e.total||0),0);
+    const dtFmt=r.data?r.data.split('-').reverse().join('/'):'—';
+    html+=`<tr>
+      <td style="font-weight:600">${dtFmt}</td>
+      <td>${r.pedidos_analisados||0}</td>
+      <td>${r.ajustados||0}</td>
+      <td>${r.protocolos||0}</td>
+      <td>${r.agendados||0}</td>
+      <td>${r.referencias||0}</td>
+      <td style="font-weight:600;color:var(--primary)">${pvFmt(totalVal)}</td>
+      <td><button class="pv-expand" onclick="pvToggleDetail(${i})">ver</button></td>
+    </tr>
+    <tr id="pvdet-${i}" style="display:none"><td colspan="8" class="pv-detail">${pvBuildDetail(r)}</td></tr>`;
+  });
+  html+='</tbody></table>';
+  el.innerHTML=html;
+}
+
+function pvToggleDetail(i){
+  const row=document.getElementById('pvdet-'+i);
+  const showing=row.style.display!=='none';
+  row.style.display=showing?'none':'table-row';
+  // trocar texto do botão
+  const btns=document.querySelectorAll('.pv-expand');
+  btns[i].textContent=showing?'ver':'fechar';
+}
+
+function pvBuildDetail(r){
+  let html='';
+  const aj=r.ajustes||[];
+  if(aj.length){
+    html+='<strong style="display:block;margin-bottom:.35rem">Ajustes de Referência</strong>';
+    html+='<table class="pv-table" style="margin-bottom:.7rem"><thead><tr><th>Pedido Nº</th><th>Referência Atual</th><th>Sugestão</th><th>Status</th></tr></thead><tbody>';
+    aj.forEach(a=>{
+      const badge=a.status==='Aceito'?'<span class="pv-status-a">✅ Aceito</span>':'<span class="pv-status-n">❌ Negado</span>';
+      html+=`<tr><td>${a.pedido||'—'}</td><td>${a.referencia||'—'}</td><td>${a.sugestao||'—'}</td><td>${badge}</td></tr>`;
+    });
+    html+='</tbody></table>';
+  }
+  const en=r.entradas||[];
+  if(en.length){
+    html+='<strong style="display:block;margin-bottom:.35rem">Entradas Manuais</strong>';
+    html+='<table class="pv-table"><thead><tr><th>Referência</th><th>Preço Unit.</th><th>Qtd</th><th>Total</th></tr></thead><tbody>';
+    en.forEach(e=>{
+      html+=`<tr><td>${e.ref||'—'}</td><td>${pvFmt(e.preco)}</td><td>${e.qtd}</td><td style="font-weight:600">${pvFmt(e.total)}</td></tr>`;
+    });
+    html+='</tbody></table>';
+  }
+  if(!aj.length&&!en.length) html='<em style="color:var(--muted)">Sem detalhes registrados.</em>';
+  return html;
 }
 
 // ── DRAG & DROP ────────────────────────────────────────

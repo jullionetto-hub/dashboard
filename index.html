@@ -370,8 +370,10 @@ table.dtbl tr:hover td{background:#f8fafc}
   <!-- TAB: POR DATA -->
   <div class="tab-content" id="tc-dia">
     <div class="day-nav">
-      <span class="day-label">Data:</span>
+      <span class="day-label">De:</span>
       <input type="date" class="day-input" id="dayPicker" onchange="renderDailyView()">
+      <span class="day-label">Até:</span>
+      <input type="date" class="day-input" id="dayPickerAte" onchange="renderDailyView()">
       <button class="btn bn" onclick="moveDay(-1)">‹ Anterior</button>
       <button class="btn bn" onclick="moveDay(1)">Próximo ›</button>
       <button class="btn bp" onclick="goToday()">Hoje</button>
@@ -580,7 +582,9 @@ function setupDates(){
   const last=new Date(y,now.getMonth()+1,0).getDate();
   document.getElementById('fDtS').value=`${y}-${m}-01`;
   document.getElementById('fDtE').value=`${y}-${m}-${String(last).padStart(2,'0')}`;
-  document.getElementById('dayPicker').value=`${y}-${m}-${String(now.getDate()).padStart(2,'0')}`;
+  const today=`${y}-${m}-${String(now.getDate()).padStart(2,'0')}`;
+  document.getElementById('dayPicker').value=today;
+  document.getElementById('dayPickerAte').value=today;
 }
 function showLoginScreen(){
   document.getElementById('loginScreen').style.display='flex';
@@ -645,6 +649,7 @@ async function loadFromSupabase(){
     // Pula para a data mais recente se: sem data selecionada, data selecionada sem dados, ou chegaram dados mais novos
     if(!dataSel||!ALL.some(d=>d.data===dataSel)||latestDate>dataSel){
       picker.value=latestDate;
+      document.getElementById('dayPickerAte').value=latestDate;
       if(latestDate!==prevLatest) toast(`Novos dados: ${latestDate.split('-').reverse().join('/')} 🆕`,'ok');
     }
   }
@@ -1038,15 +1043,20 @@ function setDayShift(t){
   renderDailyView();
 }
 function renderDailyView(){
-  const date=document.getElementById('dayPicker').value;
+  const de=document.getElementById('dayPicker').value;
+  const ate=getDayAte();
+  const isRange=!!(de&&ate&&de!==ate);
   const box=document.getElementById('dailyView');
   dayCharts.forEach(c=>c.destroy()); dayCharts=[];
-  if(!date){box.innerHTML=`<div class="nodata"><span class="ni">📅</span><strong>Selecione uma data</strong></div>`;return;}
+  if(!de){box.innerHTML=`<div class="nodata"><span class="ni">📅</span><strong>Selecione uma data</strong></div>`;return;}
 
-  const allDayData=ALL.filter(d=>d.data===date&&!/^(total|data|dia|soma)/i.test(d.nome.trim()));
+  const allDayData=ALL.filter(d=>d.data>=de&&d.data<=(ate||de)&&!/^(total|data|dia|soma)/i.test(d.nome.trim()));
   const dayData=dayShift?allDayData.filter(d=>d.turno===dayShift):allDayData;
-  const fmtDate=date.split('-').reverse().join('/');
-  const isSat=new Date(date+'T12:00:00').getDay()===6;
+  const fmtDe=de.split('-').reverse().join('/');
+  const fmtAte=ate&&ate!==de?ate.split('-').reverse().join('/'):'';
+  const fmtDate=fmtAte?`${fmtDe} a ${fmtAte}`:fmtDe;
+  const isSat=!isRange&&new Date(de+'T12:00:00').getDay()===6;
+  const satMult=dt=>new Date(dt+'T12:00:00').getDay()===6?.5:1;
   const total=dayData.filter(d=>!d.ausente).length;
   document.getElementById('dayInfo').textContent=total?`${total} registros${dayShift?' ('+dayShift+')':''}`:'Sem dados para esta data';
 
@@ -1066,9 +1076,9 @@ function renderDailyView(){
   const allRank=[];
   dayData.filter(d=>!d.ausente).forEach(d=>{
     const ex=allRank.find(r=>r.nome===d.nome&&r.setor===d.setor);
-    const g=GOALS[d.setor]*(isSat?.5:1);
-    if(ex){ex.qty+=d.quantidade;ex.pct=ex.qty/g*100;}
-    else allRank.push({nome:d.nome,first:d.nome.split(' ')[0],setor:d.setor,qty:d.quantidade,pct:d.quantidade/g*100,turno:d.turno});
+    const g=GOALS[d.setor]*(isRange?satMult(d.data):(isSat?.5:1));
+    if(ex){ex.qty+=d.quantidade;ex.goal+=g;ex.pct=ex.qty/ex.goal*100;}
+    else allRank.push({nome:d.nome,first:d.nome.split(' ')[0],setor:d.setor,qty:d.quantidade,goal:g,pct:d.quantidade/g*100,turno:d.turno});
   });
   allRank.sort((a,b)=>b.pct-a.pct);
 
@@ -1109,9 +1119,9 @@ function renderDailyView(){
     // build empMap and sort by qty desc, absent at bottom
     const empMap={};
     secData.forEach(d=>{
-      if(!empMap[d.nome]) empMap[d.nome]={qty:0,ausente:false,turno:d.turno};
+      if(!empMap[d.nome]) empMap[d.nome]={qty:0,ausente:false,turno:d.turno,dates:new Set()};
       if(d.ausente) empMap[d.nome].ausente=true;
-      else empMap[d.nome].qty+=d.quantidade;
+      else{empMap[d.nome].qty+=d.quantidade;empMap[d.nome].dates.add(d.data);}
     });
     const allEmps=Object.keys(empMap)
       .sort((a,b)=>{
@@ -1127,7 +1137,8 @@ function renderDailyView(){
       const r=empMap[e];
       if(!r||r.ausente) return `<tr><td style="text-align:left;padding:.38rem .7rem;color:var(--muted)">${e}</td><td></td><td class="c-ab" style="text-align:center">ausente</td><td></td></tr>`;
       rowTotal+=r.qty; rank++;
-      const pct=r.qty/(GOALS[sec]*(isSat?.5:1))*100;
+      const effGoal=isRange?[...r.dates].reduce((s,dt)=>s+GOALS[sec]*satMult(dt),0)||GOALS[sec]:GOALS[sec]*(isSat?.5:1);
+      const pct=r.qty/effGoal*100;
       const cls=pct>=100?'c-ok':pct>=90?'c-pt':'c-lo';
       const bc=pct>=100?'#22c55e':pct>=90?'#f59e0b':'#ef4444';
       const rankBadge=rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':`<span style="font-size:.65rem;color:var(--muted);font-weight:600">#${rank}</span>`;
@@ -1149,7 +1160,8 @@ function renderDailyView(){
       </tr>`;
     }).join('');
 
-    const teamPct=rowTotal/(shiftGoal*(isSat?.5:1))*100;
+    const effDays=isRange?[...new Set(secData.filter(d=>!d.ausente).map(d=>d.data))].reduce((s,dt)=>s+satMult(dt),0)||1:(isSat?.5:1);
+    const teamPct=rowTotal/(shiftGoal*effDays)*100;
     const teamBc=teamPct>=100?'#22c55e':teamPct>=75?'#f59e0b':'#ef4444';
     sectorsHtml+=`<div class="sector-block">
       <div class="sector-title ${secTags[sec]}">${secIcons[sec]} ${sec}${shiftLabel}</div>
@@ -1337,19 +1349,29 @@ function buildDayViz(data){
   }));
 }
 
+function getDayAte(){
+  return document.getElementById('dayPickerAte').value||document.getElementById('dayPicker').value;
+}
+
 function moveDay(delta){
   const inp=document.getElementById('dayPicker');
+  const inpAte=document.getElementById('dayPickerAte');
   if(!inp.value) return;
-  const d=new Date(inp.value+'T12:00:00');
-  d.setDate(d.getDate()+delta);
-  inp.value=d.toISOString().split('T')[0];
+  const de=new Date(inp.value+'T12:00:00');
+  const ate=inpAte.value?new Date(inpAte.value+'T12:00:00'):new Date(de);
+  de.setDate(de.getDate()+delta);
+  ate.setDate(ate.getDate()+delta);
+  inp.value=de.toISOString().split('T')[0];
+  inpAte.value=ate.toISOString().split('T')[0];
   renderDailyView();
 }
 
 function goToday(){
   const now=new Date();
   const y=now.getFullYear(),m=String(now.getMonth()+1).padStart(2,'0'),d=String(now.getDate()).padStart(2,'0');
-  document.getElementById('dayPicker').value=`${y}-${m}-${d}`;
+  const today=`${y}-${m}-${d}`;
+  document.getElementById('dayPicker').value=today;
+  document.getElementById('dayPickerAte').value=today;
   renderDailyView();
 }
 
@@ -1698,14 +1720,15 @@ async function rmFile(fname,turno){
 
 // ── CSV EXPORT ─────────────────────────────────────────
 function exportDayCSV(){
-  const date=document.getElementById('dayPicker').value;
-  if(!date){toast('Selecione uma data','err');return;}
-  const dayData=ALL.filter(d=>d.data===date&&!d.ausente);
-  if(!dayData.length){toast('Sem dados para este dia','err');return;}
-  const fmtDate=date.split('-').reverse().join('/');
+  const de=document.getElementById('dayPicker').value;
+  const ate=getDayAte();
+  if(!de){toast('Selecione uma data','err');return;}
+  const dayData=ALL.filter(d=>d.data>=de&&d.data<=ate&&!d.ausente);
+  if(!dayData.length){toast('Sem dados para o período','err');return;}
   const h='Data,Nome,Setor,Turno,Quantidade,Meta,% Meta\n';
-  const body=dayData.map(r=>`"${fmtDate}","${r.nome}","${r.setor}","${r.turno}",${r.quantidade},${GOALS[r.setor]||0},${(r.quantidade/(GOALS[r.setor]||1)*100).toFixed(0)}%`).join('\n');
-  dl('﻿'+h+body,`resultado_${date}.csv`,'text/csv;charset=utf-8');
+  const body=dayData.map(r=>`"${r.data.split('-').reverse().join('/')}","${r.nome}","${r.setor}","${r.turno}",${r.quantidade},${GOALS[r.setor]||0},${(r.quantidade/(GOALS[r.setor]||1)*100).toFixed(0)}%`).join('\n');
+  const suffix=de===ate?de:`${de}_a_${ate}`;
+  dl('﻿'+h+body,`resultado_${suffix}.csv`,'text/csv;charset=utf-8');
   toast('CSV exportado!','ok');
 }
 function exportCSV(){

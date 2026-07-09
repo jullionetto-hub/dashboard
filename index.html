@@ -1119,15 +1119,18 @@ function renderDailyView(){
     // build empMap and sort by qty desc, absent at bottom
     const empMap={};
     secData.forEach(d=>{
-      if(!empMap[d.nome]) empMap[d.nome]={qty:0,ausente:false,turno:d.turno,dates:new Set()};
+      if(!empMap[d.nome]) empMap[d.nome]={qty:0,ausente:false,turno:d.turno,dates:new Set(),allDates:new Set()};
+      empMap[d.nome].allDates.add(d.data);
       if(d.ausente) empMap[d.nome].ausente=true;
       else{empMap[d.nome].qty+=d.quantidade;empMap[d.nome].dates.add(d.data);}
     });
     const allEmps=Object.keys(empMap)
       .sort((a,b)=>{
         const ra=empMap[a],rb=empMap[b];
-        if(ra.ausente&&!rb.ausente) return 1;
-        if(!ra.ausente&&rb.ausente) return -1;
+        const raFull=ra.ausente&&!(isRange&&ra.qty>0);
+        const rbFull=rb.ausente&&!(isRange&&rb.qty>0);
+        if(raFull&&!rbFull) return 1;
+        if(!raFull&&rbFull) return -1;
         return rb.qty-ra.qty;
       });
 
@@ -1135,9 +1138,10 @@ function renderDailyView(){
     let rank=0;
     const empRows=allEmps.map(e=>{
       const r=empMap[e];
-      if(!r||r.ausente) return `<tr><td style="text-align:left;padding:.38rem .7rem;color:var(--muted)">${e}</td><td></td><td class="c-ab" style="text-align:center">ausente</td><td></td></tr>`;
+      const fullyAbsent=r.ausente&&(!isRange||r.qty===0);
+      if(!r||fullyAbsent) return `<tr><td style="text-align:left;padding:.38rem .7rem;color:var(--muted)">${e}</td><td></td><td class="c-ab" style="text-align:center">ausente</td><td></td></tr>`;
       rowTotal+=r.qty; rank++;
-      const effGoal=isRange?[...r.dates].reduce((s,dt)=>s+GOALS[sec]*satMult(dt),0)||GOALS[sec]:GOALS[sec]*(isSat?.5:1);
+      const effGoal=isRange?[...r.allDates].reduce((s,dt)=>s+GOALS[sec]*satMult(dt),0)||GOALS[sec]:GOALS[sec]*(isSat?.5:1);
       const pct=r.qty/effGoal*100;
       const cls=pct>=100?'c-ok':pct>=90?'c-pt':'c-lo';
       const bc=pct>=100?'#22c55e':pct>=90?'#f59e0b':'#ef4444';
@@ -1145,7 +1149,7 @@ function renderDailyView(){
       return `<tr>
         <td style="text-align:left;padding:.38rem .7rem">
           <span style="margin-right:.35rem">${rankBadge}</span>
-          <span style="font-weight:500">${e}</span>
+          <span style="font-weight:500">${e}</span>${isRange&&r.ausente?`<span style="font-size:.6rem;background:#fee2e2;color:#991b1b;padding:.05rem .3rem;border-radius:9999px;margin-left:.35rem;font-weight:600">${r.allDates.size-r.dates.size}f</span>`:''}
         </td>
         <td style="text-align:center"><span class="sh ${shiftCls[r.turno]||''}">${r.turno}</span></td>
         <td class="${cls}" style="text-align:center;font-weight:700">${r.qty}</td>

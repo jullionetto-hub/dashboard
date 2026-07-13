@@ -558,6 +558,12 @@ function getGoalShift(sec,turno,date){
   }
   return base;
 }
+function getBaseGoal(sec,turno){
+  if(sec==='Reposição') return 270;
+  if(turno==='Tarde') return 250;
+  if(!turno||turno==='') return 850;
+  return 300;
+}
 const SECTORS = ['Separação','Checkout','Embalagem','Reposição'];
 const SHIFTS  = ['Manhã','Tarde','Noite'];
 
@@ -1109,7 +1115,7 @@ function renderDailyView(){
     if(!hasLoaded) continue;
 
     const shiftGoal=getGoalShift(sec,dayShift);
-    const adjGoal=isSat?Math.round(shiftGoal*.5):shiftGoal;
+    const adjGoal=shiftGoal; // getGoalShift já aplica o ½ de sábado
     const satTag=isSat?' <span style="color:#f59e0b;font-weight:600">(Sábado ½)</span>':'';
     const shiftLabel=dayShift
       ?` <span style="font-size:.7rem;font-weight:400;opacity:.75">| ${dayShift} — Meta equipe: ${adjGoal}${satTag}</span>`
@@ -1173,8 +1179,9 @@ function renderDailyView(){
       </tr>`;
     }).join('');
 
-    const effDays=isRange?[...new Set(secData.filter(d=>!d.ausente).map(d=>d.data))].reduce((s,dt)=>s+satMult(dt),0)||1:(isSat?.5:1);
-    const teamPct=rowTotal/(shiftGoal*effDays)*100;
+    const effDays=isRange?[...new Set(secData.filter(d=>!d.ausente).map(d=>d.data))].reduce((s,dt)=>s+satMult(dt),0)||1:1;
+    const teamGoal=isRange?getBaseGoal(sec,dayShift)*effDays:shiftGoal;
+    const teamPct=rowTotal/teamGoal*100;
     const teamBc=teamPct>=100?'#22c55e':teamPct>=75?'#f59e0b':'#ef4444';
     sectorsHtml+=`<div class="sector-block">
       <div class="sector-title ${secTags[sec]}">${secIcons[sec]} ${sec}${shiftLabel}</div>
@@ -1400,7 +1407,7 @@ function updKPIs(data, turno, allData, isRangeView=false){
     const id=KID[sec];
     const rows=src.filter(d=>d.setor===sec&&!d.ausente);
     const effDays=_effDays(rows);
-    const goal=getGoalShift(sec,t)*effDays;
+    const goal=(isRangeView?getBaseGoal(sec,t):getGoalShift(sec,t))*effDays;
     const kgEl=document.getElementById('kg-'+id);
     const diasTag=effDays>1?` <span style="font-size:.65rem;color:var(--muted)">(${effDays.toFixed(0)} dias)</span>`:'';
     if(kgEl) kgEl.innerHTML=`${t?'Meta turno':'Meta Geral'}: <strong>${goal.toFixed(0)}</strong>${diasTag}`;
@@ -1439,7 +1446,7 @@ function updKPIs(data, turno, allData, isRangeView=false){
   const totalGoal=shifts.reduce((s,sh)=>{
     const shRows=allSrc.filter(d=>d.turno===sh);
     const shEff=_effDays(shRows);
-    return s+getGoalShift('Checkout',sh)*shEff;
+    return s+(isRangeView?getBaseGoal('Checkout',sh):getGoalShift('Checkout',sh))*shEff;
   },0);
   const pctAll=totalGoal>0?totalAll/totalGoal*100:0;
   document.getElementById('kv-overall').textContent=totalAll.toFixed(0);

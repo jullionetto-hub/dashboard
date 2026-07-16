@@ -252,6 +252,25 @@ table.dtbl tr:hover td{background:#f8fafc}
 .pv-hist-table td.td-left{text-align:left}
 .pv-expand{background:none;border:none;cursor:pointer;color:var(--primary);font-size:.75rem;padding:.1rem .3rem;text-decoration:underline}
 .pv-detail{background:#f8fafc;font-size:.76rem;padding:.5rem .8rem}
+/* ERROS DE PROTOCOLO */
+.ec-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:.8rem;margin-bottom:1.2rem}
+.ec-card{background:var(--card);border-radius:.65rem;padding:.85rem 1rem;box-shadow:var(--sh);text-align:center;border-top:3px solid}
+.ec-c1{border-color:#3b82f6}.ec-c2{border-color:#22c55e}.ec-c3{border-color:#ef4444}.ec-c4{border-color:#8b5cf6}
+.ec-val{font-size:1.8rem;font-weight:700;line-height:1.1;margin-bottom:.2rem}
+.ec-lbl{font-size:.65rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.ec-upload{background:var(--bg);border:2px dashed var(--border);border-radius:.7rem;padding:1.5rem;text-align:center;margin-bottom:1.2rem;transition:border-color .2s}
+.ec-upload:hover{border-color:#93c5fd}
+.ec-upload label{cursor:pointer;display:inline-flex;align-items:center;gap:.5rem;background:var(--primary);color:#fff;padding:.5rem 1.1rem;border-radius:.4rem;font-size:.82rem;font-weight:600}
+.ec-upload label:hover{background:var(--primary-dark)}
+.ec-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.ec-section{background:var(--bg);border-radius:.65rem;padding:.9rem 1rem}
+.ec-stitle{font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.7rem}
+.ec-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.ec-table th{background:#f1f5f9;font-size:.69rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:.42rem .6rem;border-bottom:1px solid var(--border);text-align:left}
+.ec-table td{padding:.36rem .6rem;border-bottom:1px solid #f1f5f9}
+.ec-table tbody tr:hover{background:#fff}
+.ec-table tbody tr:last-child td{border-bottom:none}
+@media(max-width:750px){.ec-cards{grid-template-columns:repeat(2,1fr)}.ec-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -366,6 +385,7 @@ table.dtbl tr:hover td{background:#f8fafc}
     <button class="tab on" id="tab-dia" onclick="switchTab('dia')">📅 Por Data</button>
     <button class="tab" id="tab-resumo" onclick="switchTab('resumo')">📊 Resumo do Período</button>
     <button class="tab" id="tab-prevencao" onclick="switchTab('prevencao')">🛡️ Prevenção</button>
+    <button class="tab" id="tab-erros" onclick="switchTab('erros')">📋 Erros de Protocolo</button>
   </div>
 
   <!-- TAB: POR DATA -->
@@ -502,6 +522,81 @@ table.dtbl tr:hover td{background:#f8fafc}
       <div id="pvHistoric"><div class="nodata"><span class="ni">🛡️</span><strong>Nenhum registro ainda</strong><br><small>Lance o primeiro dia acima.</small></div></div>
     </div>
 
+  </div>
+
+  <!-- TAB: ERROS DE PROTOCOLO -->
+  <div class="tab-content" id="tc-erros" style="display:none">
+
+    <!-- Upload -->
+    <div class="ec-upload">
+      <div style="font-size:2rem;margin-bottom:.4rem">📋</div>
+      <p style="font-size:.86rem;font-weight:600;margin-bottom:.2rem">Importar planilha de erros de protocolo</p>
+      <p style="font-size:.75rem;color:var(--muted);margin-bottom:.7rem">Na planilha Google Sheets, vá em <strong>Arquivo → Fazer download → CSV</strong> e importe aqui</p>
+      <label for="errosFile">📂 Selecionar arquivo (CSV ou XLSX)</label>
+      <input type="file" id="errosFile" accept=".csv,.xlsx,.xls" onchange="loadErrosFile(event)" style="display:none">
+      <p style="font-size:.7rem;color:var(--muted);margin-top:.55rem" id="ecFileName"></p>
+    </div>
+
+    <!-- Cards resumo -->
+    <div class="ec-cards" id="erros-summary-cards" style="display:none">
+      <div class="ec-card ec-c1"><div class="ec-val" id="ec-total">0</div><div class="ec-lbl">Total Erros</div></div>
+      <div class="ec-card ec-c2"><div class="ec-val" id="ec-ajustados">0</div><div class="ec-lbl">Ajustados</div></div>
+      <div class="ec-card ec-c3"><div class="ec-val" id="ec-protocolos">0</div><div class="ec-lbl">Protocolados</div></div>
+      <div class="ec-card ec-c4"><div class="ec-val" id="ec-pct">—</div><div class="ec-lbl">Taxa de Ajuste</div></div>
+    </div>
+
+    <!-- Análises (aparecem após importar) -->
+    <div id="erros-analysis" style="display:none">
+
+      <div class="ec-grid">
+        <!-- Ranking separadores -->
+        <div class="ec-section">
+          <div class="ec-stitle">👷 Ranking de Separadores</div>
+          <table class="ec-table">
+            <thead><tr><th>Separador</th><th>Total</th><th style="color:var(--success)">Ajust.</th><th style="color:var(--danger)">Proto.</th><th>% Ajuste</th></tr></thead>
+            <tbody id="erros-sep-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- Motivos -->
+        <div class="ec-section">
+          <div class="ec-stitle">🔍 Motivos de Erro</div>
+          <table class="ec-table">
+            <thead><tr><th>Motivo</th><th>Total</th><th>%</th><th style="color:var(--success)">Ajust.</th></tr></thead>
+            <tbody id="erros-mot-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Por turno -->
+      <div class="ec-section" style="margin-bottom:1rem">
+        <div class="ec-stitle">🕐 Por Turno</div>
+        <div id="erros-turno-wrap" style="display:flex;gap:.6rem;flex-wrap:wrap"></div>
+      </div>
+
+      <!-- Tabela detalhes -->
+      <div class="ec-section">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;flex-wrap:wrap;gap:.5rem">
+          <div class="ec-stitle" style="margin:0">📄 Todos os Registros</div>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+            <input type="text" id="errosBusca" placeholder="Buscar separador, código, marca..." oninput="filterErros()" class="day-input" style="font-size:.78rem;padding:.3rem .55rem;width:220px">
+            <select id="errosFiltroAjust" onchange="filterErros()" class="day-input" style="font-size:.78rem;padding:.3rem .55rem">
+              <option value="">Todos os status</option>
+              <option value="ajustado">Ajustados</option>
+              <option value="protocolo">Protocolados</option>
+            </select>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="ec-table">
+            <thead><tr><th>Data</th><th>Pedido</th><th>Código</th><th>Marca</th><th>Qtd</th><th>Separador</th><th>Turno</th><th>Status</th><th>Motivo</th></tr></thead>
+            <tbody id="erros-detail-tbody"></tbody>
+          </table>
+        </div>
+        <div id="erros-detail-count" style="font-size:.72rem;color:var(--muted);margin-top:.5rem;text-align:right"></div>
+      </div>
+
+    </div>
   </div>
 
 </div><!-- /wrap -->
@@ -686,7 +781,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 
 // ── TABS ───────────────────────────────────────────────
 function switchTab(t){
-  ['dia','resumo','prevencao'].forEach(k=>{
+  ['dia','resumo','prevencao','erros'].forEach(k=>{
     document.getElementById('tab-'+k).classList.toggle('on',k===t);
     document.getElementById('tc-'+k).style.display=k===t?'block':'none';
   });
@@ -1968,6 +2063,134 @@ function copiarDiagnostico(){
       return `${titulo}\n${itens.join('\n')}`;
     }).join('\n\n');
   navigator.clipboard.writeText(txt).then(()=>toast('Diagnóstico copiado!','ok')).catch(()=>toast('Erro ao copiar','err'));
+}
+
+// ── ERROS DE PROTOCOLO ────────────────────────────────────
+let ERROS_DATA=[];
+
+function loadErrosFile(e){
+  const file=e.target.files[0];if(!file)return;
+  document.getElementById('ecFileName').textContent='📄 '+file.name;
+  if(file.name.toLowerCase().endsWith('.csv')){
+    const r=new FileReader();
+    r.onload=ev=>{
+      const lines=ev.target.result.split(/\r?\n/).map(parseErrosCSVLine);
+      parseErrosRows(lines);
+    };
+    r.readAsText(file,'UTF-8');
+  } else {
+    const r=new FileReader();
+    r.onload=ev=>{
+      const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      parseErrosRows(XLSX.utils.sheet_to_json(ws,{header:1,defval:''}));
+    };
+    r.readAsArrayBuffer(file);
+  }
+}
+
+function parseErrosCSVLine(line){
+  const res=[];let cur='',inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"'){inQ=!inQ;continue;}
+    if(c===','&&!inQ){res.push(cur.trim());cur='';continue;}
+    cur+=c;
+  }
+  res.push(cur.trim());return res;
+}
+
+function parseErrosRows(rows){
+  let hi=-1;
+  for(let i=0;i<Math.min(10,rows.length);i++){
+    const r=rows[i];
+    if(r&&r[0]&&r[0].toString().toLowerCase().includes('data')&&r[1]&&r[1].toString().toLowerCase().includes('pedido')){hi=i;break;}
+  }
+  if(hi===-1){toast('Formato inválido: cabeçalho não encontrado','err');return;}
+  const data=[];
+  for(let i=hi+1;i<rows.length;i++){
+    const r=rows[i];
+    if(!r||(!r[1]&&!r[0]))continue;
+    const dRaw=(r[0]||'').toString().trim();
+    if(!dRaw||dRaw.toLowerCase()==='data')continue;
+    const ajRaw=(r[8]||'').toString().toLowerCase();
+    data.push({
+      data:dRaw,pedido:(r[1]||'').toString().trim(),codigo:(r[2]||'').toString().trim(),
+      saldo:parseInt(r[3])||0,marca:(r[4]||'').toString().trim(),qtd:parseInt(r[5])||0,
+      separador:(r[6]||'').toString().trim()||'—',turno:(r[7]||'').toString().trim(),
+      ajustado:ajRaw.includes('ajust'),motivo:(r[9]||'').toString().trim()
+    });
+  }
+  if(!data.length){toast('Nenhum registro encontrado no arquivo','err');return;}
+  ERROS_DATA=data;
+  renderErros(data);
+  toast(`${data.length} registros carregados com sucesso`,'ok');
+}
+
+function renderErros(rows){
+  const total=rows.length;
+  const aj=rows.filter(r=>r.ajustado).length;
+  const proto=total-aj;
+  const pct=total?Math.round(aj/total*100):0;
+  document.getElementById('ec-total').textContent=total;
+  document.getElementById('ec-ajustados').textContent=aj;
+  document.getElementById('ec-protocolos').textContent=proto;
+  document.getElementById('ec-pct').textContent=pct+'%';
+  document.getElementById('erros-summary-cards').style.display='grid';
+
+  // Ranking separadores
+  const sepMap={};
+  rows.forEach(r=>{
+    const k=r.separador||'—';
+    if(!sepMap[k])sepMap[k]={t:0,aj:0,pr:0};
+    sepMap[k].t++;r.ajustado?sepMap[k].aj++:sepMap[k].pr++;
+  });
+  const seps=Object.entries(sepMap).map(([n,v])=>({n,...v,pct:Math.round(v.aj/v.t*100)})).sort((a,b)=>b.pr-a.pr||b.t-a.t);
+  document.getElementById('erros-sep-tbody').innerHTML=seps.map((s,i)=>{
+    const[bg,fg]=s.pct>=80?['#dcfce7','#166534']:s.pct>=50?['#fef3c7','#92400e']:['#fee2e2','#991b1b'];
+    return`<tr><td><strong>${i+1}.</strong> ${s.n}</td><td style="text-align:center">${s.t}</td><td style="text-align:center;color:var(--success);font-weight:600">${s.aj}</td><td style="text-align:center;color:var(--danger);font-weight:600">${s.pr}</td><td style="text-align:center"><span style="background:${bg};color:${fg};padding:.12rem .42rem;border-radius:9999px;font-size:.73rem;font-weight:700">${s.pct}%</span></td></tr>`;
+  }).join('');
+
+  // Motivos
+  const motMap={};
+  rows.forEach(r=>{
+    const m=r.motivo||'(sem motivo)';
+    if(!motMap[m])motMap[m]={t:0,aj:0};
+    motMap[m].t++;if(r.ajustado)motMap[m].aj++;
+  });
+  const mots=Object.entries(motMap).map(([m,v])=>({m,...v})).sort((a,b)=>b.t-a.t);
+  document.getElementById('erros-mot-tbody').innerHTML=mots.map(m=>`<tr><td>${m.m}</td><td style="text-align:center">${m.t}</td><td style="text-align:center">${Math.round(m.t/total*100)}%</td><td style="text-align:center;color:var(--success)">${m.aj}</td></tr>`).join('');
+
+  // Por turno
+  const turMap={};
+  rows.forEach(r=>{
+    const t=r.turno||'Sem turno';
+    if(!turMap[t])turMap[t]={t:0,aj:0};
+    turMap[t].t++;if(r.ajustado)turMap[t].aj++;
+  });
+  const turColors={'Manhã':'#f59e0b','Tarde':'#3b82f6','Noite':'#8b5cf6'};
+  document.getElementById('erros-turno-wrap').innerHTML=Object.entries(turMap).sort((a,b)=>b[1].t-a[1].t).map(([tn,v])=>`<div style="flex:1;min-width:140px;background:var(--card);border-radius:.55rem;padding:.7rem .9rem;border-left:3px solid ${turColors[tn]||'#64748b'}"><div style="font-weight:700;font-size:.9rem;margin-bottom:.22rem">${tn}</div><div style="font-size:.78rem;color:var(--muted)">${v.t} erro${v.t!==1?'s':''}</div><div style="font-size:.78rem;margin-top:.12rem"><span style="color:var(--success)">${v.aj} ajust.</span> · <span style="color:var(--danger)">${v.t-v.aj} proto.</span></div></div>`).join('');
+
+  document.getElementById('erros-analysis').style.display='block';
+  renderErrosDetail(rows);
+}
+
+function filterErros(){
+  const busca=document.getElementById('errosBusca').value.toLowerCase();
+  const filt=document.getElementById('errosFiltroAjust').value;
+  renderErrosDetail(ERROS_DATA.filter(r=>{
+    if(filt==='ajustado'&&!r.ajustado)return false;
+    if(filt==='protocolo'&&r.ajustado)return false;
+    if(busca&&!(r.separador+r.codigo+r.marca+r.motivo+r.pedido).toLowerCase().includes(busca))return false;
+    return true;
+  }));
+}
+
+function renderErrosDetail(rows){
+  const MAX=200,shown=rows.slice(0,MAX);
+  const statusBadge=aj=>`<span style="background:${aj?'#dcfce7':'#fee2e2'};color:${aj?'#166534':'#991b1b'};padding:.1rem .38rem;border-radius:9999px;font-size:.71rem;font-weight:600">${aj?'Ajustado':'Protocolo'}</span>`;
+  document.getElementById('erros-detail-tbody').innerHTML=shown.map(r=>`<tr><td>${r.data}</td><td style="font-size:.78rem">${r.pedido}</td><td style="font-size:.74rem;color:var(--muted)">${r.codigo}</td><td>${r.marca}</td><td style="text-align:center">${r.qtd}</td><td><strong>${r.separador}</strong></td><td>${r.turno||'—'}</td><td>${statusBadge(r.ajustado)}</td><td style="font-size:.78rem">${r.motivo||'—'}</td></tr>`).join('');
+  document.getElementById('erros-detail-count').textContent=rows.length>MAX?`Mostrando ${MAX} de ${rows.length} registros`:`${rows.length} registro${rows.length!==1?'s':''}`;
 }
 
 // ── TOAST ──────────────────────────────────────────────

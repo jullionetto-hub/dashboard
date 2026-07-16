@@ -527,14 +527,10 @@ table.dtbl tr:hover td{background:#f8fafc}
   <!-- TAB: ERROS DE PROTOCOLO -->
   <div class="tab-content" id="tc-erros" style="display:none">
 
-    <!-- Upload -->
-    <div class="ec-upload">
-      <div style="font-size:2rem;margin-bottom:.4rem">📋</div>
-      <p style="font-size:.86rem;font-weight:600;margin-bottom:.2rem">Importar planilha de erros de protocolo</p>
-      <p style="font-size:.75rem;color:var(--muted);margin-bottom:.7rem">Na planilha Google Sheets, vá em <strong>Arquivo → Fazer download → CSV</strong> e importe aqui</p>
-      <label for="errosFile">📂 Selecionar arquivo (CSV ou XLSX)</label>
-      <input type="file" id="errosFile" accept=".csv,.xlsx,.xls" onchange="loadErrosFile(event)" style="display:none">
-      <p style="font-size:.7rem;color:var(--muted);margin-top:.55rem" id="ecFileName"></p>
+    <!-- Barra de controle -->
+    <div style="display:flex;align-items:center;gap:.7rem;margin-bottom:1.1rem;flex-wrap:wrap">
+      <button class="btn bsuc" id="btnSincErros" onclick="loadErrosFromSupabase()">🔄 Sincronizar dados</button>
+      <span id="erros-last-sync" style="font-size:.74rem;color:var(--muted)">Clique para carregar os dados da planilha</span>
     </div>
 
     <!-- Cards resumo -->
@@ -785,6 +781,7 @@ function switchTab(t){
     document.getElementById('tab-'+k).classList.toggle('on',k===t);
     document.getElementById('tc-'+k).style.display=k===t?'block':'none';
   });
+  if(t==='erros'&&!ERROS_DATA.length) loadErrosFromSupabase();
 }
 
 // ── PREVENÇÃO ───────────────────────────────────────────
@@ -2068,63 +2065,28 @@ function copiarDiagnostico(){
 // ── ERROS DE PROTOCOLO ────────────────────────────────────
 let ERROS_DATA=[];
 
-function loadErrosFile(e){
-  const file=e.target.files[0];if(!file)return;
-  document.getElementById('ecFileName').textContent='📄 '+file.name;
-  if(file.name.toLowerCase().endsWith('.csv')){
-    const r=new FileReader();
-    r.onload=ev=>{
-      const lines=ev.target.result.split(/\r?\n/).map(parseErrosCSVLine);
-      parseErrosRows(lines);
-    };
-    r.readAsText(file,'UTF-8');
-  } else {
-    const r=new FileReader();
-    r.onload=ev=>{
-      const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      parseErrosRows(XLSX.utils.sheet_to_json(ws,{header:1,defval:''}));
-    };
-    r.readAsArrayBuffer(file);
+async function loadErrosFromSupabase(){
+  const btn=document.getElementById('btnSincErros');
+  const lbl=document.getElementById('erros-last-sync');
+  btn.disabled=true;btn.textContent='⏳ Carregando...';
+  lbl.textContent='Buscando dados...';
+  const{data,error}=await sb.from('prevention_errors').select('*').order('data',{ascending:false});
+  btn.disabled=false;btn.textContent='🔄 Sincronizar dados';
+  if(error){toast('Erro ao carregar: '+error.message,'err');lbl.textContent='Erro ao carregar';return;}
+  if(!data||!data.length){
+    lbl.textContent='Sem dados — rode sincronizarErros() no Apps Script primeiro';
+    toast('Nenhum dado encontrado no Supabase','inf');return;
   }
-}
-
-function parseErrosCSVLine(line){
-  const res=[];let cur='',inQ=false;
-  for(let i=0;i<line.length;i++){
-    const c=line[i];
-    if(c==='"'){inQ=!inQ;continue;}
-    if(c===','&&!inQ){res.push(cur.trim());cur='';continue;}
-    cur+=c;
-  }
-  res.push(cur.trim());return res;
-}
-
-function parseErrosRows(rows){
-  let hi=-1;
-  for(let i=0;i<Math.min(10,rows.length);i++){
-    const r=rows[i];
-    if(r&&r[0]&&r[0].toString().toLowerCase().includes('data')&&r[1]&&r[1].toString().toLowerCase().includes('pedido')){hi=i;break;}
-  }
-  if(hi===-1){toast('Formato inválido: cabeçalho não encontrado','err');return;}
-  const data=[];
-  for(let i=hi+1;i<rows.length;i++){
-    const r=rows[i];
-    if(!r||(!r[1]&&!r[0]))continue;
-    const dRaw=(r[0]||'').toString().trim();
-    if(!dRaw||dRaw.toLowerCase()==='data')continue;
-    const ajRaw=(r[8]||'').toString().toLowerCase();
-    data.push({
-      data:dRaw,pedido:(r[1]||'').toString().trim(),codigo:(r[2]||'').toString().trim(),
-      saldo:parseInt(r[3])||0,marca:(r[4]||'').toString().trim(),qtd:parseInt(r[5])||0,
-      separador:(r[6]||'').toString().trim()||'—',turno:(r[7]||'').toString().trim(),
-      ajustado:ajRaw.includes('ajust'),motivo:(r[9]||'').toString().trim()
-    });
-  }
-  if(!data.length){toast('Nenhum registro encontrado no arquivo','err');return;}
-  ERROS_DATA=data;
-  renderErros(data);
-  toast(`${data.length} registros carregados com sucesso`,'ok');
+  ERROS_DATA=data.map(r=>({
+    data:r.data||'',pedido:r.pedido||'',codigo:r.codigo||'',
+    saldo:r.saldo||0,marca:r.marca||'',qtd:r.qtd||0,
+    separador:r.separador||'—',turno:r.turno||'',
+    ajustado:r.ajustado||false,motivo:r.motivo||''
+  }));
+  const now=new Date().toLocaleString('pt-BR');
+  lbl.textContent=`${ERROS_DATA.length} registros — última atualização ${now}`;
+  renderErros(ERROS_DATA);
+  toast(`${ERROS_DATA.length} registros carregados`,'ok');
 }
 
 function renderErros(rows){
@@ -2186,10 +2148,16 @@ function filterErros(){
   }));
 }
 
+function fmtErroDate(d){
+  if(!d)return'—';
+  if(d.includes('-')){const[y,m,day]=d.split('-');return`${day}/${m}`;}
+  return d;
+}
+
 function renderErrosDetail(rows){
   const MAX=200,shown=rows.slice(0,MAX);
-  const statusBadge=aj=>`<span style="background:${aj?'#dcfce7':'#fee2e2'};color:${aj?'#166534':'#991b1b'};padding:.1rem .38rem;border-radius:9999px;font-size:.71rem;font-weight:600">${aj?'Ajustado':'Protocolo'}</span>`;
-  document.getElementById('erros-detail-tbody').innerHTML=shown.map(r=>`<tr><td>${r.data}</td><td style="font-size:.78rem">${r.pedido}</td><td style="font-size:.74rem;color:var(--muted)">${r.codigo}</td><td>${r.marca}</td><td style="text-align:center">${r.qtd}</td><td><strong>${r.separador}</strong></td><td>${r.turno||'—'}</td><td>${statusBadge(r.ajustado)}</td><td style="font-size:.78rem">${r.motivo||'—'}</td></tr>`).join('');
+  const badge=aj=>`<span style="background:${aj?'#dcfce7':'#fee2e2'};color:${aj?'#166534':'#991b1b'};padding:.1rem .38rem;border-radius:9999px;font-size:.71rem;font-weight:600">${aj?'Ajustado':'Protocolo'}</span>`;
+  document.getElementById('erros-detail-tbody').innerHTML=shown.map(r=>`<tr><td>${fmtErroDate(r.data)}</td><td style="font-size:.78rem">${r.pedido}</td><td style="font-size:.74rem;color:var(--muted)">${r.codigo}</td><td>${r.marca}</td><td style="text-align:center">${r.qtd}</td><td><strong>${r.separador}</strong></td><td>${r.turno||'—'}</td><td>${badge(r.ajustado)}</td><td style="font-size:.78rem">${r.motivo||'—'}</td></tr>`).join('');
   document.getElementById('erros-detail-count').textContent=rows.length>MAX?`Mostrando ${MAX} de ${rows.length} registros`:`${rows.length} registro${rows.length!==1?'s':''}`;
 }
 

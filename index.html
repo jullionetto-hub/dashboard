@@ -630,6 +630,23 @@ table.dtbl tr:hover td{background:#f8fafc}
       <div id="splitsList"><div class="nodata"><span class="ni">⚙️</span><strong>Nenhuma configuração ainda</strong></div></div>
     </div>
 
+    <div class="pv-hist" style="margin-top:1.2rem">
+      <p class="stitle" style="margin-bottom:.8rem">📅 Grade de Horários</p>
+      <div style="overflow-x:auto">
+        <table class="pv-table">
+          <thead><tr><th>Turno</th><th>Dia</th><th>Entrada</th><th>Saída</th><th>Pausa</th><th>Horas líquidas</th></tr></thead>
+          <tbody>
+            <tr><td rowspan="2" style="font-weight:700">Manhã</td><td>Seg–Sex</td><td>06:00</td><td>15:00</td><td>1h15</td><td><strong>7h45</strong></td></tr>
+            <tr><td>Sábado</td><td>06:00</td><td>10:00</td><td>—</td><td><strong>4h00</strong></td></tr>
+            <tr><td rowspan="2" style="font-weight:700">Tarde</td><td>Seg–Sex</td><td>13:00</td><td>22:00</td><td>1h15</td><td><strong>7h45</strong></td></tr>
+            <tr><td>Sábado</td><td>10:00</td><td>14:00</td><td>—</td><td><strong>4h00</strong></td></tr>
+            <tr><td rowspan="2" style="font-weight:700">Noite</td><td>Seg–Sex</td><td>22:00</td><td>06:48</td><td>1h15</td><td><strong>7h33</strong></td></tr>
+            <tr><td>Sábado</td><td colspan="4" style="color:var(--muted);font-style:italic">Sem expediente</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 
 </div><!-- /wrap -->
@@ -672,6 +689,27 @@ const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY);
 
 // ── CONFIG ─────────────────────────────────────────────
 const GOALS   = {Separação:65,Checkout:90,Embalagem:120,Reposição:90}; // meta individual por colaborador
+
+const SHIFT_CONFIG = {
+  'Manhã': {
+    weekday:  {entrada:'06:00', saida:'15:00', pausa:'1h15', liquido:7.75},
+    saturday: {entrada:'06:00', saida:'10:00', pausa:'—',    liquido:4.00}
+  },
+  'Tarde': {
+    weekday:  {entrada:'13:00', saida:'22:00', pausa:'1h15', liquido:7.75},
+    saturday: {entrada:'10:00', saida:'14:00', pausa:'—',    liquido:4.00}
+  },
+  'Noite': {
+    weekday:  {entrada:'22:00', saida:'06:48', pausa:'1h15', liquido:7.55},
+    saturday: null // sem expediente
+  }
+};
+function shiftLiquidHours(turno, date){
+  const cfg=SHIFT_CONFIG[turno];if(!cfg)return null;
+  const isSat=new Date(date+'T12:00:00').getDay()===6;
+  const sc=isSat?cfg.saturday:cfg.weekday;
+  return sc?sc.liquido:0;
+}
 function getGoalShift(sec,turno,date){
   // Base por setor/turno
   let base;

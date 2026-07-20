@@ -616,12 +616,12 @@ table.dtbl tr:hover td{background:#f8fafc}
         </select>
       </div>
       <table class="pv-table" style="margin-bottom:.6rem">
-        <thead><tr><th>Setor</th><th style="width:130px">% do tempo</th><th style="width:36px"></th></tr></thead>
+        <thead><tr><th>Setor</th><th style="width:130px">Horas no setor</th><th style="width:36px"></th></tr></thead>
         <tbody id="splitTbody"></tbody>
       </table>
       <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
         <button class="pv-add" onclick="addSplitRow()">+ Adicionar setor</button>
-        <span style="font-size:.78rem;color:var(--muted)">Total: <strong id="splitPctSum">0%</strong> <span style="color:var(--muted)">(precisa somar 100%)</span></span>
+        <span style="font-size:.78rem;color:var(--muted)">Total: <strong id="splitPctSum">0h</strong></span>
       </div>
     </div>
 
@@ -2199,10 +2199,10 @@ function populateSplitNome(){
   sel.innerHTML='<option value="">Selecionar colaborador...</option>'+nomes.map(n=>`<option value="${n}"${n===cur?'selected':''}>${n}</option>`).join('');
 }
 
-function addSplitRow(setor='',pct=''){
+function addSplitRow(setor='',horas=''){
   const tr=document.createElement('tr');
   tr.innerHTML=`<td><select class="day-input" style="font-size:.8rem;width:100%" name="sp-setor">${fhSetorOptions(setor)}</select></td>
-    <td><div style="display:flex;align-items:center;gap:.3rem"><input type="number" class="day-input" style="font-size:.8rem;width:80px" name="sp-pct" value="${pct}" min="1" max="100" step="1" placeholder="50">%</div></td>
+    <td><div style="display:flex;align-items:center;gap:.3rem"><input type="number" class="day-input" style="font-size:.8rem;width:80px" name="sp-pct" value="${horas}" min="0.5" max="12" step="0.5" placeholder="4"><span style="font-size:.78rem;color:var(--muted)">h</span></div></td>
     <td><button onclick="this.closest('tr').remove();updatePctSum()" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:1rem;padding:.2rem .4rem">✕</button></td>`;
   tr.querySelector('[name="sp-pct"]').addEventListener('input',updatePctSum);
   document.getElementById('splitTbody').appendChild(tr);
@@ -2213,7 +2213,7 @@ function updatePctSum(){
   const inputs=[...document.getElementById('splitTbody').querySelectorAll('[name="sp-pct"]')];
   const sum=inputs.reduce((s,i)=>s+(parseFloat(i.value)||0),0);
   const el=document.getElementById('splitPctSum');
-  if(el){el.textContent=sum+'%';el.style.color=Math.abs(sum-100)<0.5?'var(--success)':'var(--danger)';}
+  if(el){el.textContent=sum.toFixed(1)+'h';el.style.color='var(--text)';}
 }
 
 function loadSplitForEmployee(){
@@ -2240,8 +2240,8 @@ async function saveSplits(){
     entries.push({nome,setor,percentual:pct});
   }
   if(entries.length<2){toast('Adicione ao menos 2 setores','err');return;}
-  const sum=entries.reduce((s,e)=>s+e.percentual,0);
-  if(Math.abs(sum-100)>1){toast(`Percentuais somam ${sum}%, precisam somar 100%`,'err');return;}
+  const sumH=entries.reduce((s,e)=>s+e.percentual,0);
+  if(sumH<=0){toast('Informe horas válidas','err');return;}
   await sb.from('employee_splits').delete().eq('nome',nome);
   const{error}=await sb.from('employee_splits').insert(entries);
   if(error){toast('Erro: '+error.message,'err');return;}
@@ -2264,7 +2264,7 @@ function renderSplitsList(){
   if(!entries.length){el.innerHTML='<div class="nodata"><span class="ni">⚙️</span><strong>Nenhuma configuração ainda</strong></div>';return;}
   el.innerHTML=entries.sort((a,b)=>a[0].localeCompare(b[0])).map(([nome,setores])=>{
     const tot=Object.values(setores).reduce((s,v)=>s+v,0);
-    const parts=Object.entries(setores).map(([s,v])=>`<span><strong>${s}:</strong> ${Math.round(v/tot*100)}%</span>`).join(' · ');
+    const parts=Object.entries(setores).map(([s,v])=>`<span><strong>${s}:</strong> ${v}h <span style="color:var(--muted);font-size:.7rem">(${Math.round(v/tot*100)}%)</span></span>`).join(' · ');
     return`<div style="background:var(--card);border-radius:.55rem;padding:.65rem 1rem;margin-bottom:.4rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem">
       <div>
         <span style="font-weight:700;font-size:.85rem">${nome}</span>

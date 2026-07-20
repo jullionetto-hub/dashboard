@@ -271,6 +271,9 @@ table.dtbl tr:hover td{background:#f8fafc}
 .ec-table tbody tr:hover{background:#fff}
 .ec-table tbody tr:last-child td{border-bottom:none}
 @media(max-width:750px){.ec-cards{grid-template-columns:repeat(2,1fr)}.ec-grid{grid-template-columns:1fr}}
+/* HORAS POR FUNÇÃO */
+.fh-tip{font-size:.74rem;color:var(--muted);background:#f8fafc;border:1px solid var(--border);border-radius:.45rem;padding:.55rem .8rem;margin-bottom:.9rem;display:flex;gap:.45rem;align-items:flex-start}
+.fh-badge{display:inline-block;padding:.1rem .38rem;border-radius:9999px;font-size:.65rem;font-weight:700;background:#ede9fe;color:#5b21b6;margin-left:.3rem}
 </style>
 </head>
 <body>
@@ -386,6 +389,7 @@ table.dtbl tr:hover td{background:#f8fafc}
     <button class="tab" id="tab-resumo" onclick="switchTab('resumo')">📊 Resumo do Período</button>
     <button class="tab" id="tab-prevencao" onclick="switchTab('prevencao')">🛡️ Prevenção</button>
     <button class="tab" id="tab-erros" onclick="switchTab('erros')">📋 Erros de Protocolo</button>
+    <button class="tab" id="tab-horas" onclick="switchTab('horas')">⏱️ Horas por Função</button>
   </div>
 
   <!-- TAB: POR DATA -->
@@ -595,6 +599,35 @@ table.dtbl tr:hover td{background:#f8fafc}
     </div>
   </div>
 
+  <!-- TAB: HORAS POR FUNÇÃO -->
+  <div class="tab-content" id="tc-horas" style="display:none">
+
+    <div class="fh-tip">💡 Lance aqui apenas os colaboradores que <strong>trocaram de setor</strong> durante o dia. Quem trabalhou o turno inteiro em um setor não precisa ser lançado — a meta cheia já é aplicada automaticamente.</div>
+
+    <div class="pv-form">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.6rem">
+        <p class="stitle" style="margin:0">Lançar Horas por Função</p>
+        <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+          <label style="font-size:.72rem;color:var(--muted);font-weight:600">Data:</label>
+          <input type="date" id="fhDate" class="day-input" onchange="fhLoadDay()">
+          <button class="btn bsuc" onclick="saveFunctionHours()">💾 Salvar</button>
+        </div>
+      </div>
+      <table class="pv-table" style="margin-bottom:.6rem">
+        <thead><tr><th>Colaborador</th><th>Setor</th><th style="width:110px">Horas no setor</th><th style="width:36px"></th></tr></thead>
+        <tbody id="fhTbody"></tbody>
+      </table>
+      <button class="pv-add" onclick="addFHRow()">+ Adicionar linha</button>
+      <div style="margin-top:.6rem;font-size:.72rem;color:var(--muted)">Ex: Danilo fez 4h em Checkout e 4h em Separação → adicione 2 linhas para ele.</div>
+    </div>
+
+    <div class="pv-hist" style="margin-top:1.2rem">
+      <p class="stitle" style="margin-bottom:.8rem">Histórico de Lançamentos</p>
+      <div id="fhHistory"><div class="nodata"><span class="ni">⏱️</span><strong>Nenhum lançamento ainda</strong></div></div>
+    </div>
+
+  </div>
+
 </div><!-- /wrap -->
 
 </div><!-- /appContent -->
@@ -771,17 +804,19 @@ document.addEventListener('DOMContentLoaded',async()=>{
   document.getElementById('pvDate').value=pvToday();
   await loadFromSupabase();
   await loadPrevention();
+  await loadFunctionHours();
   initCharts();
   sb.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT')showLoginScreen();});
 });
 
 // ── TABS ───────────────────────────────────────────────
 function switchTab(t){
-  ['dia','resumo','prevencao','erros'].forEach(k=>{
+  ['dia','resumo','prevencao','erros','horas'].forEach(k=>{
     document.getElementById('tab-'+k).classList.toggle('on',k===t);
     document.getElementById('tc-'+k).style.display=k===t?'block':'none';
   });
   if(t==='erros'&&!ERROS_DATA.length) loadErrosFromSupabase();
+  if(t==='horas'){const d=pvToday();document.getElementById('fhDate').value=d;fhLoadDay();}
 }
 
 // ── PREVENÇÃO ───────────────────────────────────────────
@@ -1175,7 +1210,8 @@ function renderDailyView(){
   const allRank=[];
   dayData.filter(d=>!d.ausente).forEach(d=>{
     const ex=allRank.find(r=>r.nome===d.nome&&r.setor===d.setor);
-    const g=GOALS[d.setor]*(isRange?satMult(d.data):(isSat?.5:1));
+    const fhG=getFHFraction(d.nome,d.data,d.setor);
+    const g=GOALS[d.setor]*(isRange?satMult(d.data):(isSat?.5:1))*(fhG!==null?fhG:1);
     if(ex){ex.qty+=d.quantidade;ex.goal+=g;ex.pct=ex.qty/ex.goal*100;}
     else allRank.push({nome:d.nome,first:d.nome.split(' ')[0],setor:d.setor,qty:d.quantidade,goal:g,pct:d.quantidade/g*100,turno:d.turno});
   });
@@ -1249,7 +1285,9 @@ function renderDailyView(){
       const fullyAbsent=r.ausente&&(!isRange||r.qty===0);
       if(!r||fullyAbsent) return `<tr><td style="text-align:left;padding:.38rem .7rem;color:var(--muted)">${e}</td><td></td><td class="c-ab" style="text-align:center">ausente</td><td></td></tr>`;
       rowTotal+=r.qty; rank++;
-      const effGoal=isRange?[...r.allDates].reduce((s,dt)=>s+GOALS[sec]*satMult(dt),0)||GOALS[sec]:GOALS[sec]*(isSat?.5:1);
+      const effGoal=isRange
+        ?[...r.allDates].reduce((s,dt)=>{const fh=getFHFraction(e,dt,sec);return s+GOALS[sec]*satMult(dt)*(fh!==null?fh:1);},0)||GOALS[sec]
+        :GOALS[sec]*(isSat?.5:1)*(()=>{const fh=getFHFraction(e,de,sec);return fh!==null?fh:1;})();
       const pct=r.qty/effGoal*100;
       const cls=pct>=100?'c-ok':pct>=90?'c-pt':'c-lo';
       const bc=pct>=100?'#22c55e':pct>=90?'#f59e0b':'#ef4444';
@@ -1727,13 +1765,18 @@ function getRows(){
     if(!empMap[k]) empMap[k]={nome:d.nome,setor:d.setor,turno:d.turno,tot:0,cnt:0,dias:new Set()};
     empMap[k].tot+=d.quantidade; empMap[k].cnt++; empMap[k].dias.add(d.data);
   });
-  return Object.values(empMap).map(e=>({
-    nome:e.nome,setor:e.setor,turno:e.turno,
-    dias:e.dias.size,total:e.tot,
-    media:e.cnt?e.tot/e.cnt:0,
-    meta:GOALS[e.setor]||0,
-    pct:GOALS[e.setor]?(e.tot/e.cnt)/GOALS[e.setor]*100:0
-  }));
+  const satM=dt=>new Date(dt+'T12:00:00').getDay()===6?.5:1;
+  return Object.values(empMap).map(e=>{
+    const diasArr=[...e.dias];
+    const totalEffGoal=diasArr.reduce((s,dt)=>{
+      const fh=getFHFraction(e.nome,dt,e.setor);
+      return s+GOALS[e.setor]*satM(dt)*(fh!==null?fh:1);
+    },0)||GOALS[e.setor];
+    const adjMeta=diasArr.length?Math.round(totalEffGoal/diasArr.length*10)/10:GOALS[e.setor];
+    const media=e.cnt?e.tot/e.cnt:0;
+    const pct=totalEffGoal>0?e.tot/totalEffGoal*100:0;
+    return{nome:e.nome,setor:e.setor,turno:e.turno,dias:diasArr.length,total:e.tot,media,meta:adjMeta,pct};
+  });
 }
 
 // Returns employees grouped by name, each with per-sector sub-rows
@@ -2060,6 +2103,111 @@ function copiarDiagnostico(){
       return `${titulo}\n${itens.join('\n')}`;
     }).join('\n\n');
   navigator.clipboard.writeText(txt).then(()=>toast('Diagnóstico copiado!','ok')).catch(()=>toast('Erro ao copiar','err'));
+}
+
+// ── HORAS POR FUNÇÃO ──────────────────────────────────────
+let FH_MAP={}, FH_ALL=[];
+
+async function loadFunctionHours(){
+  const{data,error}=await sb.from('function_hours').select('*').order('data',{ascending:false});
+  if(error){console.error('FH load:',error);return;}
+  FH_ALL=data||[];
+  FH_MAP={};
+  FH_ALL.forEach(r=>{
+    const k=r.nome+'|'+r.data;
+    if(!FH_MAP[k])FH_MAP[k]={total:0};
+    FH_MAP[k][r.setor]=parseFloat(r.horas);
+    FH_MAP[k].total+=parseFloat(r.horas);
+  });
+  renderFHHistory();
+}
+
+function getFHFraction(nome,data,setor){
+  const e=FH_MAP[nome+'|'+data];
+  if(!e||!e[setor])return null;
+  return e[setor]/e.total;
+}
+
+function fhNomeOptions(sel=''){
+  return['',...new Set(ALL.map(d=>d.nome))].sort().map(n=>`<option value="${n}"${n===sel?'selected':''}>${n||'Selecionar...'}</option>`).join('');
+}
+function fhSetorOptions(sel=''){
+  return['Separação','Checkout','Embalagem','Reposição'].map(s=>`<option value="${s}"${s===sel?'selected':''}>${s}</option>`).join('');
+}
+
+function addFHRow(nome='',setor='',horas=''){
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td><select class="day-input" style="font-size:.8rem;width:100%" name="fh-nome">${fhNomeOptions(nome)}</select></td>
+    <td><select class="day-input" style="font-size:.8rem;width:100%" name="fh-setor">${fhSetorOptions(setor)}</select></td>
+    <td><input type="number" class="day-input" style="font-size:.8rem;width:90px" name="fh-horas" value="${horas}" min="0.5" max="12" step="0.5" placeholder="4"></td>
+    <td><button onclick="this.closest('tr').remove()" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:1rem;padding:.2rem .4rem">✕</button></td>`;
+  document.getElementById('fhTbody').appendChild(tr);
+}
+
+function fhLoadDay(){
+  const date=document.getElementById('fhDate').value;
+  document.getElementById('fhTbody').innerHTML='';
+  if(!date)return;
+  const existing=FH_ALL.filter(r=>r.data===date);
+  if(existing.length){existing.forEach(r=>addFHRow(r.nome,r.setor,r.horas));}
+}
+
+async function saveFunctionHours(){
+  const date=document.getElementById('fhDate').value;
+  if(!date){toast('Selecione uma data','err');return;}
+  const rows=[...document.getElementById('fhTbody').querySelectorAll('tr')];
+  const entries=[];const seen=new Set();
+  for(const row of rows){
+    const nome=row.querySelector('[name="fh-nome"]').value;
+    const setor=row.querySelector('[name="fh-setor"]').value;
+    const horas=parseFloat(row.querySelector('[name="fh-horas"]').value);
+    if(!nome||!setor||!horas||horas<=0)continue;
+    const key=nome+'|'+setor;
+    if(seen.has(key)){toast(`Duplicata: ${nome} em ${setor}`,'err');return;}
+    seen.add(key);
+    entries.push({nome,data:date,setor,horas});
+  }
+  if(!entries.length){toast('Nenhuma entrada válida','err');return;}
+  // Apaga entradas do dia para os nomes lançados e reinseré
+  const nomes=[...new Set(entries.map(e=>e.nome))];
+  for(const n of nomes){
+    await sb.from('function_hours').delete().eq('nome',n).eq('data',date);
+  }
+  const{error}=await sb.from('function_hours').insert(entries);
+  if(error){toast('Erro ao salvar: '+error.message,'err');return;}
+  toast(`${entries.length} lançamento(s) salvos`,'ok');
+  await loadFunctionHours();
+}
+
+async function deleteFHDate(date){
+  if(!confirm('Apagar todos os lançamentos de '+date.split('-').reverse().join('/')+'?'))return;
+  const{error}=await sb.from('function_hours').delete().eq('data',date);
+  if(error){toast('Erro: '+error.message,'err');return;}
+  toast('Lançamentos apagados','ok');
+  await loadFunctionHours();
+}
+
+function renderFHHistory(){
+  const el=document.getElementById('fhHistory');
+  if(!el)return;
+  if(!FH_ALL.length){el.innerHTML='<div class="nodata"><span class="ni">⏱️</span><strong>Nenhum lançamento ainda</strong></div>';return;}
+  const byDate={};
+  FH_ALL.forEach(r=>{if(!byDate[r.data])byDate[r.data]=[];byDate[r.data].push(r);});
+  el.innerHTML=Object.entries(byDate).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,60).map(([date,rows])=>{
+    const fmtD=date.split('-').reverse().join('/');
+    const byNome={};
+    rows.forEach(r=>{if(!byNome[r.nome])byNome[r.nome]=[];byNome[r.nome].push(r);});
+    const detail=Object.entries(byNome).map(([nome,rs])=>{
+      const total=rs.reduce((s,r)=>s+parseFloat(r.horas),0);
+      const parts=rs.map(r=>`${r.setor}: ${r.horas}h <span style="color:var(--muted);font-size:.68rem">(${Math.round(r.horas/total*100)}%)</span>`).join(' · ');
+      return`<div style="font-size:.8rem;padding:.12rem 0"><strong>${nome}:</strong> ${parts}</div>`;
+    }).join('');
+    return`<div style="background:var(--card);border-radius:.55rem;padding:.65rem 1rem;margin-bottom:.5rem;border-left:3px solid var(--primary)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
+        <span style="font-weight:700;font-size:.82rem">📅 ${fmtD}</span>
+        <button onclick="deleteFHDate('${date}')" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:.72rem">🗑️ Apagar dia</button>
+      </div>${detail}</div>`;
+  }).join('');
 }
 
 // ── ERROS DE PROTOCOLO ────────────────────────────────────

@@ -2200,20 +2200,37 @@ function populateSplitNome(){
 }
 
 function addSplitRow(setor='',horas=''){
+  const h=horas!==''?Math.floor(Number(horas)):'';
+  const m=horas!==''?Math.round((Number(horas)-Math.floor(Number(horas)))*60):'';
   const tr=document.createElement('tr');
   tr.innerHTML=`<td><select class="day-input" style="font-size:.8rem;width:100%" name="sp-setor">${fhSetorOptions(setor)}</select></td>
-    <td><div style="display:flex;align-items:center;gap:.3rem"><input type="number" class="day-input" style="font-size:.8rem;width:80px" name="sp-pct" value="${horas}" min="0.5" max="12" step="0.5" placeholder="4"><span style="font-size:.78rem;color:var(--muted)">h</span></div></td>
+    <td><div style="display:flex;align-items:center;gap:.25rem">
+      <input type="number" class="day-input" style="font-size:.8rem;width:50px;text-align:center" name="sp-h" value="${h}" min="0" max="12" step="1" placeholder="0">
+      <span style="font-size:.78rem;color:var(--muted)">h</span>
+      <input type="number" class="day-input" style="font-size:.8rem;width:50px;text-align:center" name="sp-m" value="${m}" min="0" max="59" step="1" placeholder="00">
+      <span style="font-size:.78rem;color:var(--muted)">min</span>
+    </div></td>
     <td><button onclick="this.closest('tr').remove();updatePctSum()" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:1rem;padding:.2rem .4rem">✕</button></td>`;
-  tr.querySelector('[name="sp-pct"]').addEventListener('input',updatePctSum);
+  tr.querySelector('[name="sp-h"]').addEventListener('input',updatePctSum);
+  tr.querySelector('[name="sp-m"]').addEventListener('input',updatePctSum);
   document.getElementById('splitTbody').appendChild(tr);
   updatePctSum();
 }
 
+function rowToHours(row){
+  const h=parseFloat(row.querySelector('[name="sp-h"]')?.value)||0;
+  const m=parseFloat(row.querySelector('[name="sp-m"]')?.value)||0;
+  return h+m/60;
+}
+
 function updatePctSum(){
-  const inputs=[...document.getElementById('splitTbody').querySelectorAll('[name="sp-pct"]')];
-  const sum=inputs.reduce((s,i)=>s+(parseFloat(i.value)||0),0);
+  const rows=[...document.getElementById('splitTbody').querySelectorAll('tr')];
+  const sum=rows.reduce((s,r)=>s+rowToHours(r),0);
   const el=document.getElementById('splitPctSum');
-  if(el){el.textContent=sum.toFixed(1)+'h';el.style.color='var(--text)';}
+  if(el){
+    const th=Math.floor(sum);const tm=Math.round((sum-th)*60);
+    el.textContent=th+'h'+(tm>0?' '+tm+'min':'');el.style.color='var(--text)';
+  }
 }
 
 function loadSplitForEmployee(){
@@ -2233,11 +2250,11 @@ async function saveSplits(){
   const entries=[];const seen=new Set();
   for(const row of rows){
     const setor=row.querySelector('[name="sp-setor"]').value;
-    const pct=parseFloat(row.querySelector('[name="sp-pct"]').value);
-    if(!setor||!pct||pct<=0)continue;
+    const totalH=rowToHours(row);
+    if(!setor||totalH<=0)continue;
     if(seen.has(setor)){toast('Setor duplicado: '+setor,'err');return;}
     seen.add(setor);
-    entries.push({nome,setor,percentual:pct});
+    entries.push({nome,setor,percentual:Math.round(totalH*100)/100});
   }
   if(entries.length<2){toast('Adicione ao menos 2 setores','err');return;}
   const sumH=entries.reduce((s,e)=>s+e.percentual,0);
@@ -2264,7 +2281,7 @@ function renderSplitsList(){
   if(!entries.length){el.innerHTML='<div class="nodata"><span class="ni">⚙️</span><strong>Nenhuma configuração ainda</strong></div>';return;}
   el.innerHTML=entries.sort((a,b)=>a[0].localeCompare(b[0])).map(([nome,setores])=>{
     const tot=Object.values(setores).reduce((s,v)=>s+v,0);
-    const parts=Object.entries(setores).map(([s,v])=>`<span><strong>${s}:</strong> ${v}h <span style="color:var(--muted);font-size:.7rem">(${Math.round(v/tot*100)}%)</span></span>`).join(' · ');
+    const parts=Object.entries(setores).map(([s,v])=>{const vh=Math.floor(v);const vm=Math.round((v-vh)*60);const lbl=vh+'h'+(vm>0?' '+vm+'min':'');return`<span><strong>${s}:</strong> ${lbl} <span style="color:var(--muted);font-size:.7rem">(${Math.round(v/tot*100)}%)</span></span>`;}).join(' · ');
     return`<div style="background:var(--card);border-radius:.55rem;padding:.65rem 1rem;margin-bottom:.4rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem">
       <div>
         <span style="font-weight:700;font-size:.85rem">${nome}</span>

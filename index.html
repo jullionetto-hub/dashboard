@@ -602,28 +602,32 @@ table.dtbl tr:hover td{background:#f8fafc}
   <!-- TAB: HORAS POR FUNÇÃO -->
   <div class="tab-content" id="tc-horas" style="display:none">
 
-    <div class="fh-tip">💡 Lance aqui apenas os colaboradores que <strong>trocaram de setor</strong> durante o dia. Quem trabalhou o turno inteiro em um setor não precisa ser lançado — a meta cheia já é aplicada automaticamente.</div>
+    <div class="fh-tip">⚙️ Configure aqui os colaboradores que atuam em <strong>mais de um setor</strong>. A proporção definida será aplicada em <strong>todos os dias automaticamente</strong> para calcular a meta justa de cada setor. Quem trabalha em apenas um setor não precisa ser configurado.</div>
 
     <div class="pv-form">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.6rem">
-        <p class="stitle" style="margin:0">Lançar Horas por Função</p>
-        <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
-          <label style="font-size:.72rem;color:var(--muted);font-weight:600">Data:</label>
-          <input type="date" id="fhDate" class="day-input" onchange="fhLoadDay()">
-          <button class="btn bsuc" onclick="saveFunctionHours()">💾 Salvar</button>
-        </div>
+        <p class="stitle" style="margin:0">Configurar Divisão por Setor</p>
+        <button class="btn bsuc" onclick="saveSplits()">💾 Salvar configuração</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:.7rem;margin-bottom:.8rem;flex-wrap:wrap">
+        <label style="font-size:.8rem;font-weight:600;color:var(--muted)">Colaborador:</label>
+        <select id="splitNome" class="day-input" style="font-size:.8rem;min-width:200px" onchange="loadSplitForEmployee()">
+          <option value="">Selecionar colaborador...</option>
+        </select>
       </div>
       <table class="pv-table" style="margin-bottom:.6rem">
-        <thead><tr><th>Colaborador</th><th>Setor</th><th style="width:110px">Horas no setor</th><th style="width:36px"></th></tr></thead>
-        <tbody id="fhTbody"></tbody>
+        <thead><tr><th>Setor</th><th style="width:130px">% do tempo</th><th style="width:36px"></th></tr></thead>
+        <tbody id="splitTbody"></tbody>
       </table>
-      <button class="pv-add" onclick="addFHRow()">+ Adicionar linha</button>
-      <div style="margin-top:.6rem;font-size:.72rem;color:var(--muted)">Ex: Danilo fez 4h em Checkout e 4h em Separação → adicione 2 linhas para ele.</div>
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+        <button class="pv-add" onclick="addSplitRow()">+ Adicionar setor</button>
+        <span style="font-size:.78rem;color:var(--muted)">Total: <strong id="splitPctSum">0%</strong> <span style="color:var(--muted)">(precisa somar 100%)</span></span>
+      </div>
     </div>
 
     <div class="pv-hist" style="margin-top:1.2rem">
-      <p class="stitle" style="margin-bottom:.8rem">Histórico de Lançamentos</p>
-      <div id="fhHistory"><div class="nodata"><span class="ni">⏱️</span><strong>Nenhum lançamento ainda</strong></div></div>
+      <p class="stitle" style="margin-bottom:.8rem">Configurações Ativas</p>
+      <div id="splitsList"><div class="nodata"><span class="ni">⚙️</span><strong>Nenhuma configuração ainda</strong></div></div>
     </div>
 
   </div>
@@ -805,6 +809,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   await loadFromSupabase();
   await loadPrevention();
   await loadFunctionHours();
+  await loadEmployeeSplits();
   initCharts();
   sb.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT')showLoginScreen();});
 });
@@ -816,7 +821,7 @@ function switchTab(t){
     document.getElementById('tc-'+k).style.display=k===t?'block':'none';
   });
   if(t==='erros'&&!ERROS_DATA.length) loadErrosFromSupabase();
-  if(t==='horas'){const d=pvToday();document.getElementById('fhDate').value=d;fhLoadDay();}
+  if(t==='horas'){populateSplitNome();renderSplitsList();}
 }
 
 // ── PREVENÇÃO ───────────────────────────────────────────
@@ -2105,8 +2110,9 @@ function copiarDiagnostico(){
   navigator.clipboard.writeText(txt).then(()=>toast('Diagnóstico copiado!','ok')).catch(()=>toast('Erro ao copiar','err'));
 }
 
-// ── HORAS POR FUNÇÃO ──────────────────────────────────────
+// ── HORAS POR FUNÇÃO / DIVISÃO DE SETORES ─────────────────
 let FH_MAP={}, FH_ALL=[];
+let SPLIT_MAP={}; // SPLIT_MAP[nome] = { Checkout: 60, Separação: 40 } (percentuais brutos)
 
 async function loadFunctionHours(){
   const{data,error}=await sb.from('function_hours').select('*').order('data',{ascending:false});
@@ -2123,9 +2129,115 @@ async function loadFunctionHours(){
 }
 
 function getFHFraction(nome,data,setor){
+  // Prioridade 1: override específico por dia
   const e=FH_MAP[nome+'|'+data];
-  if(!e||!e[setor])return null;
-  return e[setor]/e.total;
+  if(e&&e[setor])return e[setor]/e.total;
+  // Prioridade 2: configuração fixa (todos os dias)
+  const sp=SPLIT_MAP[nome];
+  if(sp&&sp[setor]!==undefined){
+    const tot=Object.values(sp).reduce((s,v)=>s+v,0);
+    return tot>0?sp[setor]/tot:null;
+  }
+  return null;
+}
+
+async function loadEmployeeSplits(){
+  const{data,error}=await sb.from('employee_splits').select('*').order('nome');
+  if(error){console.error('Splits load:',error);return;}
+  SPLIT_MAP={};
+  (data||[]).forEach(r=>{
+    if(!SPLIT_MAP[r.nome])SPLIT_MAP[r.nome]={};
+    SPLIT_MAP[r.nome][r.setor]=parseFloat(r.percentual);
+  });
+  renderSplitsList();
+  populateSplitNome();
+}
+
+function populateSplitNome(){
+  const sel=document.getElementById('splitNome');
+  if(!sel)return;
+  const cur=sel.value;
+  const nomes=[...new Set(ALL.map(d=>d.nome))].sort();
+  sel.innerHTML='<option value="">Selecionar colaborador...</option>'+nomes.map(n=>`<option value="${n}"${n===cur?'selected':''}>${n}</option>`).join('');
+}
+
+function addSplitRow(setor='',pct=''){
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td><select class="day-input" style="font-size:.8rem;width:100%" name="sp-setor">${fhSetorOptions(setor)}</select></td>
+    <td><div style="display:flex;align-items:center;gap:.3rem"><input type="number" class="day-input" style="font-size:.8rem;width:80px" name="sp-pct" value="${pct}" min="1" max="100" step="1" placeholder="50">%</div></td>
+    <td><button onclick="this.closest('tr').remove();updatePctSum()" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:1rem;padding:.2rem .4rem">✕</button></td>`;
+  tr.querySelector('[name="sp-pct"]').addEventListener('input',updatePctSum);
+  document.getElementById('splitTbody').appendChild(tr);
+  updatePctSum();
+}
+
+function updatePctSum(){
+  const inputs=[...document.getElementById('splitTbody').querySelectorAll('[name="sp-pct"]')];
+  const sum=inputs.reduce((s,i)=>s+(parseFloat(i.value)||0),0);
+  const el=document.getElementById('splitPctSum');
+  if(el){el.textContent=sum+'%';el.style.color=Math.abs(sum-100)<0.5?'var(--success)':'var(--danger)';}
+}
+
+function loadSplitForEmployee(){
+  document.getElementById('splitTbody').innerHTML='';
+  const nome=document.getElementById('splitNome').value;
+  if(!nome){updatePctSum();return;}
+  const existing=SPLIT_MAP[nome];
+  if(existing){Object.entries(existing).forEach(([s,v])=>addSplitRow(s,v));}
+  else{addSplitRow();addSplitRow();}
+  updatePctSum();
+}
+
+async function saveSplits(){
+  const nome=document.getElementById('splitNome').value;
+  if(!nome){toast('Selecione um colaborador','err');return;}
+  const rows=[...document.getElementById('splitTbody').querySelectorAll('tr')];
+  const entries=[];const seen=new Set();
+  for(const row of rows){
+    const setor=row.querySelector('[name="sp-setor"]').value;
+    const pct=parseFloat(row.querySelector('[name="sp-pct"]').value);
+    if(!setor||!pct||pct<=0)continue;
+    if(seen.has(setor)){toast('Setor duplicado: '+setor,'err');return;}
+    seen.add(setor);
+    entries.push({nome,setor,percentual:pct});
+  }
+  if(entries.length<2){toast('Adicione ao menos 2 setores','err');return;}
+  const sum=entries.reduce((s,e)=>s+e.percentual,0);
+  if(Math.abs(sum-100)>1){toast(`Percentuais somam ${sum}%, precisam somar 100%`,'err');return;}
+  await sb.from('employee_splits').delete().eq('nome',nome);
+  const{error}=await sb.from('employee_splits').insert(entries);
+  if(error){toast('Erro: '+error.message,'err');return;}
+  toast('Configuração salva!','ok');
+  await loadEmployeeSplits();
+}
+
+async function deleteSplit(nome){
+  if(!confirm(`Remover configuração de ${nome}?`))return;
+  const{error}=await sb.from('employee_splits').delete().eq('nome',nome);
+  if(error){toast('Erro: '+error.message,'err');return;}
+  toast('Configuração removida','ok');
+  await loadEmployeeSplits();
+}
+
+function renderSplitsList(){
+  const el=document.getElementById('splitsList');
+  if(!el)return;
+  const entries=Object.entries(SPLIT_MAP);
+  if(!entries.length){el.innerHTML='<div class="nodata"><span class="ni">⚙️</span><strong>Nenhuma configuração ainda</strong></div>';return;}
+  el.innerHTML=entries.sort((a,b)=>a[0].localeCompare(b[0])).map(([nome,setores])=>{
+    const tot=Object.values(setores).reduce((s,v)=>s+v,0);
+    const parts=Object.entries(setores).map(([s,v])=>`<span><strong>${s}:</strong> ${Math.round(v/tot*100)}%</span>`).join(' · ');
+    return`<div style="background:var(--card);border-radius:.55rem;padding:.65rem 1rem;margin-bottom:.4rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem">
+      <div>
+        <span style="font-weight:700;font-size:.85rem">${nome}</span>
+        <span style="font-size:.78rem;color:var(--muted);margin-left:.6rem">${parts}</span>
+      </div>
+      <div style="display:flex;gap:.5rem">
+        <button onclick="document.getElementById('splitNome').value='${nome}';loadSplitForEmployee()" style="background:none;border:1px solid var(--border);border-radius:.3rem;cursor:pointer;font-size:.72rem;padding:.2rem .5rem;color:var(--text)">✏️ Editar</button>
+        <button onclick="deleteSplit('${nome}')" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:.72rem;padding:.2rem .4rem">🗑️ Remover</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function fhNomeOptions(sel=''){

@@ -41,24 +41,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .stitle{font-size:.86rem;font-weight:650;margin-bottom:.7rem;display:flex;align-items:center;gap:.5rem;letter-spacing:-0.005em}
 .stitle::before{content:'';width:4px;height:.9rem;background:var(--primary);border-radius:2px;display:inline-block}
 
-/* UPLOAD COMPACTO */
-.badge{padding:.18rem .55rem;border-radius:6px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border:1px solid var(--border);background:var(--card-2);color:var(--muted)}
-.bm{}.bt{}.bn2{}
-input[type=file]{display:none}
-.ucomp{background:var(--card);border-radius:10px;padding:.6rem .9rem;border:1px solid var(--border);box-shadow:var(--sh);margin-bottom:1.1rem;display:flex;flex-direction:row;gap:.6rem}
-.ucrow{flex:1}
-.ucrow{display:flex;align-items:center;gap:.6rem;padding:.4rem .55rem;border-radius:8px;border:1px solid var(--border);background:var(--card-2);flex-wrap:wrap;transition:border-color .2s}
-.ucrow:hover{border-color:var(--primary)}.ucrow.has{border-color:var(--success);background:var(--success-tint)}.ucrow.drag{border-color:var(--primary);background:var(--primary-tint)}
-.uc-lbl{padding:.28rem .7rem;background:var(--primary);color:#fff;border-radius:6px;font-size:.74rem;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0}
-.uc-lbl:hover{background:var(--primary-dark)}
-.uc-cnt{font-size:.7rem;color:var(--muted);white-space:nowrap}
-.uc-msg{font-size:.7rem;display:none}
-.uc-msg.ok{color:var(--success-ink);display:inline}.uc-msg.err{color:var(--danger);display:inline}
-.uc-files{display:flex;gap:.3rem;flex-wrap:wrap;flex:1}
-.fitem{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:.2rem .45rem;font-size:.7rem;display:flex;align-items:center;gap:.25rem;max-width:220px}
-.fitem span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;color:var(--text)}
-.ftag{background:var(--card-2);border:1px solid var(--border);color:var(--muted);padding:.06rem .28rem;border-radius:6px;font-size:.62rem;font-weight:600;white-space:nowrap}
-.fdel{background:none;border:none;cursor:pointer;color:var(--danger);font-size:.8rem;padding:0;line-height:1;flex-shrink:0}
+/* STATUS DE SINCRONIZAÇÃO */
+.syncbar{display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.65rem 1.1rem;margin-bottom:1.1rem;box-shadow:var(--sh);font-size:.82rem}
+.syncbar-item{color:var(--muted)}
+.syncbar-item strong{color:var(--text);font-weight:650;font-variant-numeric:tabular-nums;margin-left:.3rem}
+.syncbar-note{margin-left:auto;font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:.4rem}
+.syncbar-note::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--success);display:inline-block}
 
 /* FILTRO TURNO (Por Data) */
 .sf-wrap{display:flex;gap:.3rem}
@@ -320,36 +308,12 @@ table.dtbl tr:hover td{background:var(--card-2)}
 
 <div class="wrap">
 
-  <!-- Upload compacto -->
-  <p class="stitle">Importar Planilhas por Turno</p>
-  <div class="ucomp">
-    <!-- Manhã -->
-    <div class="ucrow" id="uc-manha" ondragover="dOv(event,'manha')" ondragleave="dLv('manha')" ondrop="dDp(event,'Manhã')">
-      <span class="badge bm">☀️ Manhã</span>
-      <label class="uc-lbl" for="f-manha">+ Adicionar arquivo</label>
-      <input type="file" id="f-manha" accept=".xlsx,.xls,.csv" multiple onchange="onFiles(event,'Manhã')">
-      <span class="uc-cnt" id="cnt-manha"></span>
-      <div class="uc-msg" id="st-manha"></div>
-      <div class="uc-files" id="fl-manha"></div>
-    </div>
-    <!-- Tarde -->
-    <div class="ucrow" id="uc-tarde" ondragover="dOv(event,'tarde')" ondragleave="dLv('tarde')" ondrop="dDp(event,'Tarde')">
-      <span class="badge bt">🌤️ Tarde</span>
-      <label class="uc-lbl" for="f-tarde">+ Adicionar arquivo</label>
-      <input type="file" id="f-tarde" accept=".xlsx,.xls,.csv" multiple onchange="onFiles(event,'Tarde')">
-      <span class="uc-cnt" id="cnt-tarde"></span>
-      <div class="uc-msg" id="st-tarde"></div>
-      <div class="uc-files" id="fl-tarde"></div>
-    </div>
-    <!-- Noite -->
-    <div class="ucrow" id="uc-noite" ondragover="dOv(event,'noite')" ondragleave="dLv('noite')" ondrop="dDp(event,'Noite')">
-      <span class="badge bn2">🌙 Noite</span>
-      <label class="uc-lbl" for="f-noite">+ Adicionar arquivo</label>
-      <input type="file" id="f-noite" accept=".xlsx,.xls,.csv" multiple onchange="onFiles(event,'Noite')">
-      <span class="uc-cnt" id="cnt-noite"></span>
-      <div class="uc-msg" id="st-noite"></div>
-      <div class="uc-files" id="fl-noite"></div>
-    </div>
+  <!-- Status de sincronização -->
+  <div class="syncbar">
+    <span class="syncbar-item">☀️ Manhã <strong id="cnt-manha">—</strong></span>
+    <span class="syncbar-item">🌤️ Tarde <strong id="cnt-tarde">—</strong></span>
+    <span class="syncbar-item">🌙 Noite <strong id="cnt-noite">—</strong></span>
+    <span class="syncbar-note">Sincronizado automaticamente com a planilha</span>
   </div>
 
   <!-- KPI -->
@@ -1913,14 +1877,8 @@ function renderFileLists(){
   SHIFTS.forEach(t=>{
     const k=sk(t);
     const cnt=ALL.filter(d=>d.turno===t).length;
-    const el=document.getElementById('fl-'+k);
-    document.getElementById('cnt-'+k).textContent=cnt?cnt+' registros':'';
-    if(!FILES[t].length){el.innerHTML='';document.getElementById('uc-'+k).classList.remove('has');return;}
-    document.getElementById('uc-'+k).classList.add('has');
-    el.innerHTML=FILES[t].map(f=>{
-      const sec=[...new Set(ALL.filter(d=>d.turno===t&&d._file===f).map(d=>d.setor))].join(', ');
-      return `<div class="fitem"><span title="${f}">${f}</span><span class="ftag">${sec}</span><button class="fdel" onclick="rmFile('${f}','${t}')">✕</button></div>`;
-    }).join('');
+    const el=document.getElementById('cnt-'+k);
+    if(el) el.textContent=cnt||'—';
   });
 }
 async function rmFile(fname,turno){

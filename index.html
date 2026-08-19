@@ -201,6 +201,13 @@ table.dtbl tr:hover td{background:var(--card-2)}
 .pod-setor{font-size:.6rem;color:var(--muted);margin-top:.08rem}
 .pod-pct{font-size:1.05rem;font-weight:700;margin-top:.18rem;font-variant-numeric:tabular-nums}
 .pod-qty{font-size:.65rem;color:var(--muted);margin-top:.04rem}
+/* ALINHAMENTO DO DIA */
+.align-card{border-top:2px solid var(--primary)}
+.align-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-top:.4rem}
+.align-stat{text-align:center;background:var(--card-2);border-radius:8px;padding:.7rem .5rem}
+.align-val{font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.align-lbl{font-size:.66rem;color:var(--muted);margin-top:.3rem;text-transform:uppercase;letter-spacing:.04em}
+@media(max-width:700px){.align-grid{grid-template-columns:repeat(2,1fr)}}
 /* layout dia */
 .day-stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:.85rem;margin-bottom:1rem}
 .day-main-row{display:grid;grid-template-columns:1fr 300px;gap:1rem;align-items:start}
@@ -383,6 +390,8 @@ table.dtbl tr:hover td{background:var(--card-2)}
       </div>
       <button class="btn bsuc" onclick="exportDayCSV()">📄 Exportar CSV</button>
       <button class="btn" style="background:var(--primary);color:#fff" onclick="abrirDiagnostico()">📋 Diagnóstico do Dia</button>
+      <button class="btn bn" onclick="document.getElementById('f-align').click()">🧭 Importar Pedidos/Itens</button>
+      <input type="file" id="f-align" accept=".xlsx,.xls,.csv" onchange="onAlignFile(event)">
       <span class="day-info" id="dayInfo"></span>
     </div>
     <div id="dailyView">
@@ -1183,6 +1192,57 @@ function parseDate(val){
   return null;
 }
 
+// ── ALINHAMENTO DO DIA (pedidos/itens) ──────────────────
+let ALIGN={pedidos:0,itens:0,found:false};
+async function loadAlignment(de,ate){
+  if(!de){ALIGN={pedidos:0,itens:0,found:false};return;}
+  const {data,error}=await sb.from('daily_alignment').select('*').gte('data',de).lte('data',ate||de);
+  if(error||!data||!data.length){ALIGN={pedidos:0,itens:0,found:false};return;}
+  ALIGN={
+    pedidos:data.reduce((s,r)=>s+(r.pedidos||0),0),
+    itens:data.reduce((s,r)=>s+(r.itens||0),0),
+    found:true
+  };
+}
+function onAlignFile(e){
+  const file=e.target.files[0];
+  e.target.value='';
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=async ev=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array',cellDates:true});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+      if(!rows.length){toast('Planilha vazia ou sem dados','err');return;}
+      const keys=Object.keys(rows[0]);
+      const findKey=re=>keys.find(k=>re.test(k));
+      const kPed=findKey(/pedido.*n.mero/i);
+      const kQtd=findKey(/qtde.*pedida/i);
+      const kDat=findKey(/dat.*movto/i);
+      if(!kPed||!kQtd){toast('Colunas "Pedido - Número" e/ou "Item - Qtde. pedida" não encontradas','err');return;}
+      const pedidosSet=new Set();
+      let itens=0,dataRef=null;
+      rows.forEach(r=>{
+        const ped=String(r[kPed]||'').trim();
+        if(ped) pedidosSet.add(ped);
+        itens+=Number(r[kQtd])||0;
+        if(!dataRef&&kDat&&r[kDat]){
+          const v=r[kDat];
+          dataRef=v instanceof Date?v:new Date(v);
+        }
+      });
+      if(!dataRef||isNaN(dataRef)) dataRef=new Date();
+      const dataStr=`${dataRef.getFullYear()}-${String(dataRef.getMonth()+1).padStart(2,'0')}-${String(dataRef.getDate()).padStart(2,'0')}`;
+      const {error}=await sb.from('daily_alignment').upsert({data:dataStr,pedidos:pedidosSet.size,itens},{onConflict:'data'});
+      if(error){console.error(error);toast('Erro ao salvar alinhamento. Verifique se a tabela daily_alignment existe.','err');return;}
+      toast(`Alinhamento salvo: ${pedidosSet.size} pedidos, ${itens} itens (${dataStr.split('-').reverse().join('/')})`,'ok');
+      renderDailyView();
+    }catch(err){console.error(err);toast('Erro ao ler o arquivo','err');}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
 // ── DAILY VIEW ─────────────────────────────────────────
 function setDayShift(t){
   dayShift=t;
@@ -1192,13 +1252,14 @@ function setDayShift(t){
   document.getElementById(id).className=cls;
   renderDailyView();
 }
-function renderDailyView(){
+async function renderDailyView(){
   const de=document.getElementById('dayPicker').value;
   const ate=getDayAte();
   const isRange=!!(de&&ate&&de!==ate);
   const box=document.getElementById('dailyView');
   dayCharts.forEach(c=>c.destroy()); dayCharts=[];
   if(!de){box.innerHTML=`<div class="nodata"><span class="ni">📅</span><strong>Selecione uma data</strong></div>`;return;}
+  await loadAlignment(de,ate);
 
   const allDayData=ALL.filter(d=>d.data>=de&&d.data<=(ate||de)&&!/^(total|data|dia|soma)/i.test(d.nome.trim()));
   const dayData=dayShift?allDayData.filter(d=>d.turno===dayShift):allDayData;
@@ -1254,6 +1315,7 @@ function renderDailyView(){
 
   // ── sector tables ─────────────────────────────────────
   let sectorsHtml='';
+  let grandRealizado=0,grandMeta=0;
   for(const sec of SECTORS){
     const secData=dayData.filter(d=>d.setor===sec);
     const hasLoaded=dayShift?ALL.some(d=>d.setor===sec&&d.turno===dayShift):ALL.some(d=>d.setor===sec);
@@ -1330,6 +1392,7 @@ function renderDailyView(){
     const teamGoal=isRange?getBaseGoal(sec,dayShift)*effDays:shiftGoal;
     const teamPct=rowTotal/teamGoal*100;
     const teamBc=teamPct>=100?'var(--success)':teamPct>=75?'var(--warning)':'var(--danger)';
+    grandRealizado+=rowTotal;grandMeta+=teamGoal;
     sectorsHtml+=`<div class="sector-block">
       <div class="sector-title ${secTags[sec]}">${secIcons[sec]} ${sec}${shiftLabel}</div>
       <table class="ptable" style="max-width:500px">
@@ -1371,6 +1434,32 @@ function renderDailyView(){
     <div class="pod-pct" style="color:${podColors[i]}">${r.pct.toFixed(0)}%</div>
     <div class="pod-qty">${r.qty} un.</div>
   </div>`).join('');
+
+  // ── ALINHAMENTO DO DIA ────────────────────────────────
+  const alignPct=grandMeta?grandRealizado/grandMeta*100:0;
+  const alignBc=!grandMeta?'var(--text)':alignPct>=100?'var(--success)':alignPct>=90?'var(--warning)':'var(--danger)';
+  const alignCard=`<div class="viz-card align-card" style="margin-bottom:1rem">
+    <h4>🧭 Alinhamento do Dia${dayShift?' — '+dayShift:''}${fmtDate?' · '+fmtDate:''}</h4>
+    <div class="align-grid">
+      <div class="align-stat">
+        <div class="align-val" style="color:${alignBc}">${grandMeta?alignPct.toFixed(0)+'%':'—'}</div>
+        <div class="align-lbl">Meta do turno${grandMeta?` (${grandRealizado}/${Math.round(grandMeta)})`:''}</div>
+      </div>
+      <div class="align-stat">
+        <div class="align-val">${ALIGN.found?ALIGN.pedidos.toLocaleString('pt-BR'):'—'}</div>
+        <div class="align-lbl">Pedidos</div>
+      </div>
+      <div class="align-stat">
+        <div class="align-val">${ALIGN.found?ALIGN.itens.toLocaleString('pt-BR'):'—'}</div>
+        <div class="align-lbl">Itens</div>
+      </div>
+      <div class="align-stat">
+        <div class="align-val" style="color:${totalAbsent?'var(--danger)':'var(--text)'}">${totalAbsent}</div>
+        <div class="align-lbl">Ausências</div>
+      </div>
+    </div>
+    ${!ALIGN.found?`<div style="margin-top:.6rem;font-size:.72rem;color:var(--muted)">Sem planilha de pedidos/itens importada para este período. <label for="f-align" style="color:var(--primary);cursor:pointer;text-decoration:underline">Importar agora</label></div>`:''}
+  </div>`;
 
   // ── LINHA 1: cards de resumo ──────────────────────────
   const statsRow=`<div class="day-stats-row">
@@ -1457,7 +1546,7 @@ function renderDailyView(){
     <canvas id="dc-ranking" height="${Math.max(allRank.length*24,100)}"></canvas>
   </div>`;
 
-  let html=statsRow+sectorsGrid+vizRow+rankRow;
+  let html=alignCard+statsRow+sectorsGrid+vizRow+rankRow;
 
   box.innerHTML=html;
   buildDayViz(dayData);

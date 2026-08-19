@@ -366,6 +366,7 @@ table.dtbl tr:hover td{background:var(--card-2)}
   <!-- TABS -->
   <div class="tabs">
     <button class="tab on" id="tab-dia" onclick="switchTab('dia')">📅 Por Data</button>
+    <button class="tab" id="tab-alinhamento" onclick="switchTab('alinhamento')">🧭 Alinhamento</button>
     <button class="tab" id="tab-resumo" onclick="switchTab('resumo')">📊 Resumo do Período</button>
     <button class="tab" id="tab-prevencao" onclick="switchTab('prevencao')">🛡️ Prevenção</button>
     <button class="tab" id="tab-erros" onclick="switchTab('erros')">📋 Erros de Protocolo</button>
@@ -390,12 +391,22 @@ table.dtbl tr:hover td{background:var(--card-2)}
       </div>
       <button class="btn bsuc" onclick="exportDayCSV()">📄 Exportar CSV</button>
       <button class="btn" style="background:var(--primary);color:#fff" onclick="abrirDiagnostico()">📋 Diagnóstico do Dia</button>
-      <button class="btn bn" onclick="document.getElementById('f-align').click()">🧭 Importar Pedidos/Itens</button>
-      <input type="file" id="f-align" accept=".xlsx,.xls,.csv" onchange="onAlignFile(event)">
       <span class="day-info" id="dayInfo"></span>
     </div>
     <div id="dailyView">
       <div class="nodata"><span class="ni">📅</span><strong>Importe uma planilha para ver os dados do dia</strong></div>
+    </div>
+  </div>
+
+  <!-- TAB: ALINHAMENTO -->
+  <div class="tab-content" id="tc-alinhamento" style="display:none">
+    <div class="day-nav">
+      <button class="btn bn" onclick="document.getElementById('f-align').click()">🧭 Importar Backlog de Pedidos</button>
+      <input type="file" id="f-align" accept=".xlsx,.xls,.csv" onchange="onAlignFile(event)">
+      <span class="day-info">Suba a planilha de pedidos pendentes (aguardando separação) sempre que quiser atualizar o backlog.</span>
+    </div>
+    <div id="alignView">
+      <div class="nodata"><span class="ni">🧭</span><strong>Importe a planilha de pedidos pendentes</strong></div>
     </div>
   </div>
 
@@ -836,10 +847,11 @@ document.addEventListener('DOMContentLoaded',async()=>{
 
 // ── TABS ───────────────────────────────────────────────
 function switchTab(t){
-  ['dia','resumo','prevencao','erros','horas'].forEach(k=>{
+  ['dia','alinhamento','resumo','prevencao','erros','horas'].forEach(k=>{
     document.getElementById('tab-'+k).classList.toggle('on',k===t);
     document.getElementById('tc-'+k).style.display=k===t?'block':'none';
   });
+  if(t==='alinhamento'){loadBacklog().then(renderAlinhamento);}
   if(t==='erros'&&!ERROS_DATA.length) loadErrosFromSupabase();
   if(t==='horas'){populateSplitNome();renderSplitsList();}
 }
@@ -1192,17 +1204,12 @@ function parseDate(val){
   return null;
 }
 
-// ── ALINHAMENTO DO DIA (pedidos/itens) ──────────────────
-let ALIGN={pedidos:0,itens:0,found:false};
-async function loadAlignment(de,ate){
-  if(!de){ALIGN={pedidos:0,itens:0,found:false};return;}
-  const {data,error}=await sb.from('daily_alignment').select('*').gte('data',de).lte('data',ate||de);
-  if(error||!data||!data.length){ALIGN={pedidos:0,itens:0,found:false};return;}
-  ALIGN={
-    pedidos:data.reduce((s,r)=>s+(r.pedidos||0),0),
-    itens:data.reduce((s,r)=>s+(r.itens||0),0),
-    found:true
-  };
+// ── ALINHAMENTO (backlog de pedidos pendentes) ──────────
+let BACKLOG=[]; // [{data_pedido,pedidos,itens}] ordenado por data_pedido asc
+async function loadBacklog(){
+  const {data,error}=await sb.from('backlog_pedidos').select('*').order('data_pedido',{ascending:true});
+  if(error){console.error('backlog load:',error);BACKLOG=[];return;}
+  BACKLOG=data||[];
 }
 function onAlignFile(e){
   const file=e.target.files[0];
@@ -1220,27 +1227,106 @@ function onAlignFile(e){
       const kPed=findKey(/pedido.*n.mero/i);
       const kQtd=findKey(/qtde.*pedida/i);
       const kDat=findKey(/dat.*movto/i);
-      if(!kPed||!kQtd){toast('Colunas "Pedido - Número" e/ou "Item - Qtde. pedida" não encontradas','err');return;}
-      const pedidosSet=new Set();
-      let itens=0,dataRef=null;
+      if(!kPed||!kQtd||!kDat){toast('Colunas de Pedido, Qtde. pedida ou Data do pedido não encontradas','err');return;}
+      // agrupa por data de origem do pedido (o backlog pode ter várias datas acumuladas)
+      const byDate={};
       rows.forEach(r=>{
+        const raw=r[kDat];
+        if(!raw) return;
+        const d=raw instanceof Date?raw:new Date(raw);
+        if(isNaN(d)) return;
+        const dataStr=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        if(!byDate[dataStr]) byDate[dataStr]={pedidosSet:new Set(),itens:0};
         const ped=String(r[kPed]||'').trim();
-        if(ped) pedidosSet.add(ped);
-        itens+=Number(r[kQtd])||0;
-        if(!dataRef&&kDat&&r[kDat]){
-          const v=r[kDat];
-          dataRef=v instanceof Date?v:new Date(v);
-        }
+        if(ped) byDate[dataStr].pedidosSet.add(ped);
+        byDate[dataStr].itens+=Number(r[kQtd])||0;
       });
-      if(!dataRef||isNaN(dataRef)) dataRef=new Date();
-      const dataStr=`${dataRef.getFullYear()}-${String(dataRef.getMonth()+1).padStart(2,'0')}-${String(dataRef.getDate()).padStart(2,'0')}`;
-      const {error}=await sb.from('daily_alignment').upsert({data:dataStr,pedidos:pedidosSet.size,itens},{onConflict:'data'});
-      if(error){console.error(error);toast('Erro ao salvar alinhamento. Verifique se a tabela daily_alignment existe.','err');return;}
-      toast(`Alinhamento salvo: ${pedidosSet.size} pedidos, ${itens} itens (${dataStr.split('-').reverse().join('/')})`,'ok');
-      renderDailyView();
+      const linhas=Object.entries(byDate).map(([data_pedido,v])=>({data_pedido,pedidos:v.pedidosSet.size,itens:v.itens}));
+      if(!linhas.length){toast('Nenhuma data válida encontrada na planilha','err');return;}
+      // cada upload é uma foto do backlog atual: substitui tudo que tinha antes
+      const {error:delErr}=await sb.from('backlog_pedidos').delete().not('id','is',null);
+      if(delErr){console.error(delErr);toast('Erro ao limpar backlog anterior. Verifique se a tabela backlog_pedidos existe.','err');return;}
+      const {error:insErr}=await sb.from('backlog_pedidos').insert(linhas);
+      if(insErr){console.error(insErr);toast('Erro ao salvar backlog.','err');return;}
+      const totalPedidos=linhas.reduce((s,l)=>s+l.pedidos,0);
+      const totalItens=linhas.reduce((s,l)=>s+l.itens,0);
+      toast(`Backlog atualizado: ${totalPedidos} pedidos, ${totalItens} itens pendentes`,'ok');
+      await loadBacklog();
+      renderAlinhamento();
     }catch(err){console.error(err);toast('Erro ao ler o arquivo','err');}
   };
   reader.readAsArrayBuffer(file);
+}
+function renderAlinhamento(){
+  const box=document.getElementById('alignView');
+  if(!box) return;
+  const hoje=pvToday();
+  const hojeData=ALL.filter(d=>d.data===hoje);
+  let grandRealizado=0,grandMeta=0;
+  SECTORS.forEach(sec=>{
+    if(!ALL.some(d=>d.setor===sec)) return;
+    grandRealizado+=hojeData.filter(d=>d.setor===sec&&!d.ausente).reduce((s,d)=>s+d.quantidade,0);
+    grandMeta+=getGoalShift(sec,'',hoje);
+  });
+  const presentesHoje=new Set(hojeData.filter(d=>!d.ausente).map(d=>d.nome));
+  const ausentesHoje=new Set(hojeData.filter(d=>d.ausente).map(d=>d.nome).filter(n=>!presentesHoje.has(n))).size;
+  const metaPct=grandMeta?grandRealizado/grandMeta*100:0;
+
+  const sepDays=[...new Set(ALL.filter(d=>d.setor==='Separação'&&!d.ausente).map(d=>d.data))].sort().slice(-7);
+  const ritmo=sepDays.length?sepDays.reduce((s,dt)=>s+ALL.filter(d=>d.setor==='Separação'&&d.data===dt&&!d.ausente).reduce((s2,d)=>s2+d.quantidade,0),0)/sepDays.length:0;
+
+  const totalPedidos=BACKLOG.reduce((s,l)=>s+l.pedidos,0);
+  const totalItens=BACKLOG.reduce((s,l)=>s+l.itens,0);
+  const diasParaZerar=ritmo>0&&totalItens>0?Math.ceil(totalItens/ritmo):null;
+
+  const summary=`<div class="viz-card align-card" style="margin-bottom:1rem">
+    <h4>🧭 Hoje — ${hoje.split('-').reverse().join('/')}</h4>
+    <div class="align-grid">
+      <div class="align-stat">
+        <div class="align-val" style="color:${!grandMeta?'var(--text)':metaPct>=100?'var(--success)':metaPct>=90?'var(--warning)':'var(--danger)'}">${grandMeta?metaPct.toFixed(0)+'%':'—'}</div>
+        <div class="align-lbl">Meta do turno${grandMeta?` (${grandRealizado}/${Math.round(grandMeta)})`:''}</div>
+      </div>
+      <div class="align-stat">
+        <div class="align-val" style="color:${ausentesHoje?'var(--danger)':'var(--text)'}">${ausentesHoje}</div>
+        <div class="align-lbl">Ausências hoje</div>
+      </div>
+      <div class="align-stat">
+        <div class="align-val">${ritmo?Math.round(ritmo).toLocaleString('pt-BR'):'—'}</div>
+        <div class="align-lbl">Ritmo diário (itens · Separação)</div>
+      </div>
+      <div class="align-stat">
+        <div class="align-val" style="color:${diasParaZerar===null?'var(--text)':diasParaZerar<=1?'var(--success)':diasParaZerar<=3?'var(--warning)':'var(--danger)'}">${diasParaZerar===null?'—':diasParaZerar+'d'}</div>
+        <div class="align-lbl">P/ zerar backlog no ritmo atual</div>
+      </div>
+    </div>
+  </div>`;
+
+  if(!BACKLOG.length){
+    box.innerHTML=summary+`<div class="nodata"><span class="ni">🧭</span><strong>Nenhum backlog importado</strong><br><small>Importe a planilha de pedidos pendentes pra ver a distribuição por data.</small></div>`;
+    return;
+  }
+
+  const totalsRow=`<div class="viz-card" style="margin-bottom:1rem">
+    <h4>📦 Backlog Total Pendente</h4>
+    <div class="align-grid" style="grid-template-columns:repeat(2,1fr)">
+      <div class="align-stat"><div class="align-val">${totalPedidos.toLocaleString('pt-BR')}</div><div class="align-lbl">Pedidos pendentes</div></div>
+      <div class="align-stat"><div class="align-val">${totalItens.toLocaleString('pt-BR')}</div><div class="align-lbl">Itens pendentes</div></div>
+    </div>
+  </div>`;
+
+  const rows=BACKLOG.map(l=>{
+    const diasAberto=Math.floor((new Date(hoje+'T12:00:00')-new Date(l.data_pedido+'T12:00:00'))/86400000);
+    const cls=diasAberto<=1?'c-ok':diasAberto<=3?'c-pt':'c-lo';
+    return `<tr><td>${l.data_pedido.split('-').reverse().join('/')}</td><td class="num">${l.pedidos.toLocaleString('pt-BR')}</td><td class="num">${l.itens.toLocaleString('pt-BR')}</td><td class="${cls}" style="text-align:center;font-weight:600">${diasAberto}d</td></tr>`;
+  }).join('');
+
+  box.innerHTML=summary+totalsRow+`<div class="viz-card">
+    <h4>📅 Backlog por Data do Pedido</h4>
+    <table class="dtbl">
+      <thead><tr><th>Data do pedido</th><th class="num">Pedidos</th><th class="num">Itens</th><th style="text-align:center">Dias em aberto</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
 }
 
 // ── DAILY VIEW ─────────────────────────────────────────
@@ -1259,7 +1345,6 @@ async function renderDailyView(){
   const box=document.getElementById('dailyView');
   dayCharts.forEach(c=>c.destroy()); dayCharts=[];
   if(!de){box.innerHTML=`<div class="nodata"><span class="ni">📅</span><strong>Selecione uma data</strong></div>`;return;}
-  await loadAlignment(de,ate);
 
   const allDayData=ALL.filter(d=>d.data>=de&&d.data<=(ate||de)&&!/^(total|data|dia|soma)/i.test(d.nome.trim()));
   const dayData=dayShift?allDayData.filter(d=>d.turno===dayShift):allDayData;
@@ -1315,7 +1400,6 @@ async function renderDailyView(){
 
   // ── sector tables ─────────────────────────────────────
   let sectorsHtml='';
-  let grandRealizado=0,grandMeta=0;
   for(const sec of SECTORS){
     const secData=dayData.filter(d=>d.setor===sec);
     const hasLoaded=dayShift?ALL.some(d=>d.setor===sec&&d.turno===dayShift):ALL.some(d=>d.setor===sec);
@@ -1392,7 +1476,6 @@ async function renderDailyView(){
     const teamGoal=isRange?getBaseGoal(sec,dayShift)*effDays:shiftGoal;
     const teamPct=rowTotal/teamGoal*100;
     const teamBc=teamPct>=100?'var(--success)':teamPct>=75?'var(--warning)':'var(--danger)';
-    grandRealizado+=rowTotal;grandMeta+=teamGoal;
     sectorsHtml+=`<div class="sector-block">
       <div class="sector-title ${secTags[sec]}">${secIcons[sec]} ${sec}${shiftLabel}</div>
       <table class="ptable" style="max-width:500px">
@@ -1434,32 +1517,6 @@ async function renderDailyView(){
     <div class="pod-pct" style="color:${podColors[i]}">${r.pct.toFixed(0)}%</div>
     <div class="pod-qty">${r.qty} un.</div>
   </div>`).join('');
-
-  // ── ALINHAMENTO DO DIA ────────────────────────────────
-  const alignPct=grandMeta?grandRealizado/grandMeta*100:0;
-  const alignBc=!grandMeta?'var(--text)':alignPct>=100?'var(--success)':alignPct>=90?'var(--warning)':'var(--danger)';
-  const alignCard=`<div class="viz-card align-card" style="margin-bottom:1rem">
-    <h4>🧭 Alinhamento do Dia${dayShift?' — '+dayShift:''}${fmtDate?' · '+fmtDate:''}</h4>
-    <div class="align-grid">
-      <div class="align-stat">
-        <div class="align-val" style="color:${alignBc}">${grandMeta?alignPct.toFixed(0)+'%':'—'}</div>
-        <div class="align-lbl">Meta do turno${grandMeta?` (${grandRealizado}/${Math.round(grandMeta)})`:''}</div>
-      </div>
-      <div class="align-stat">
-        <div class="align-val">${ALIGN.found?ALIGN.pedidos.toLocaleString('pt-BR'):'—'}</div>
-        <div class="align-lbl">Pedidos</div>
-      </div>
-      <div class="align-stat">
-        <div class="align-val">${ALIGN.found?ALIGN.itens.toLocaleString('pt-BR'):'—'}</div>
-        <div class="align-lbl">Itens</div>
-      </div>
-      <div class="align-stat">
-        <div class="align-val" style="color:${totalAbsent?'var(--danger)':'var(--text)'}">${totalAbsent}</div>
-        <div class="align-lbl">Ausências</div>
-      </div>
-    </div>
-    ${!ALIGN.found?`<div style="margin-top:.6rem;font-size:.72rem;color:var(--muted)">Sem planilha de pedidos/itens importada para este período. <label for="f-align" style="color:var(--primary);cursor:pointer;text-decoration:underline">Importar agora</label></div>`:''}
-  </div>`;
 
   // ── LINHA 1: cards de resumo ──────────────────────────
   const statsRow=`<div class="day-stats-row">
@@ -1546,7 +1603,7 @@ async function renderDailyView(){
     <canvas id="dc-ranking" height="${Math.max(allRank.length*24,100)}"></canvas>
   </div>`;
 
-  let html=alignCard+statsRow+sectorsGrid+vizRow+rankRow;
+  let html=statsRow+sectorsGrid+vizRow+rankRow;
 
   box.innerHTML=html;
   buildDayViz(dayData);
